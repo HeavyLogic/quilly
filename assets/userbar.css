@@ -1,0 +1,200 @@
+/* ===================================================
+   ОБЩИЙ КЛАСС ТЁМНОГО МАТОВОГО СТЕКЛА (DARK GLASS)
+   =================================================== */
+.cms-glass-card {
+    position: fixed;
+    width: max-content;
+    background: rgba(20, 20, 20, 0.65); /* Тёмное матовое стекло */
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    color: #ffffff; /* Белый текст читается НА ЛЮБОМ фоне */
+    user-select: none;
+    z-index: 999999;
+}
+
+/* 1. Позиция центрального бара управления */
+#cms-userbar {
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 50px;
+    padding: 8px 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* 2. Позиция карточки ревизий справа внизу */
+#cms-revisions {
+    bottom: 15px;
+    right: 20px;
+    border-radius: 20px;
+    padding: 8px 16px;
+    cursor: pointer;
+}
+
+/* Переключатель (Switch) */
+.cms-switch-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.cms-switch-input { display: none; }
+
+.cms-switch-slider {
+    position: relative;
+    width: 38px;
+    height: 22px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    transition: background 0.25s ease;
+    display: inline-block;
+}
+
+.cms-switch-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background: #ffffff;
+    border-radius: 50%;
+    transition: transform 0.25s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.cms-switch-input:checked + .cms-switch-slider {
+    background: #0066cc;
+}
+
+.cms-switch-input:checked + .cms-switch-slider::after {
+    transform: translateX(16px);
+}
+
+/* Кнопки */
+.cms-btn-save {
+    background: #0066cc;
+    color: #ffffff;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cms-btn-save:hover:not(:disabled) {
+    background: #0052a3;
+    transform: translateY(-1px);
+}
+
+.cms-btn-save:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.cms-logout-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    cursor: pointer;
+    transition: color 0.2s;
+    margin-left: 4px;
+    padding: 0;
+}
+.cms-logout-btn:hover { color: #ffffff; }
+
+/* Ревизии */
+.revisions-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    font-size: 13px;
+}
+
+.cms-badge {
+    background: #0066cc;
+    color: #ffffff;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 700;
+}
+
+.revisions-wrapper {
+    height: 0px;
+    overflow: hidden;
+    position: relative;
+    transition: height 0.25s allow-discrete;
+}
+
+#cms-revisions:hover .revisions-wrapper {
+    height: auto;
+}
+
+.revisions-wrapper ul {
+    list-style: none;
+    padding: 10px 0 2px 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cms-rev-item {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.08);
+    transition: background 0.15s, color 0.15s;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.cms-rev-item:hover {
+    background: #0066cc;
+    color: #ffffff;
+}
+
+.cms-rev-empty {
+    padding: 6px 10px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Подсветка редактируемых элементов */
+body.cms-edit-mode .editable[id] {
+    outline: 2px dashed #0066cc;
+    outline-offset: 3px;
+    transition: outline-color 0.15s ease, background-color 0.15s ease !important;
+}
+
+body.cms-edit-mode .editable[id]:hover {
+    outline-color: #00ccaa;
+}
+
+body.cms-edit-mode .editable:not([id]) {
+    outline: 2px dashed #e63946 !important;
+    outline-offset: 3px;
+    background: rgba(230, 57, 70, 0.15) !important;
+    cursor: not-allowed !important;
+}
+
+body.cms-edit-mode .editable.edited {
+    outline: 2px dashed #2ec4b6 !important;
+}
