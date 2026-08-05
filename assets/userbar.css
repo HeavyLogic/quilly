@@ -36,7 +36,7 @@
     opacity: 0;
     pointer-events: none;
     border-radius: 30px;
-    padding: 4px 8px;
+    padding: 6px 12px;
     display: flex;
     align-items: center;
     gap: 2px;
@@ -47,6 +47,47 @@
     opacity: 1;
     pointer-events: auto;
     transform: translateX(-50%) translateY(0);
+}
+
+/* Группы элементов тулбара по режимам (text / link / image) */
+.cms-tb-group {
+    display: none;
+    align-items: center;
+    gap: 6px;
+}
+
+#cms-toolbar[data-mode="text"] .cms-tb-group[data-group="text"],
+#cms-toolbar[data-mode="link"] .cms-tb-group[data-group="link"],
+#cms-toolbar[data-mode="image"] .cms-tb-group[data-group="image"] {
+    display: flex;
+}
+
+/* Поля ввода в тулбаре */
+.cms-tb-input {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 20px;
+    color: #ffffff;
+    padding: 4px 12px;
+    font-size: 13px;
+    outline: none;
+    width: 220px;
+    transition: border-color 0.15s;
+}
+
+.cms-tb-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.cms-tb-input:focus {
+    border-color: #0066cc;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.cms-tb-file {
+    font-size: 12px;
+    color: #ffffff;
+    cursor: pointer;
 }
 
 /* Разделитель между группами кнопок */
@@ -78,7 +119,7 @@
     color: #ffffff;
 }
 
-/* Активное состояние кнопки (когда каретка внутри тега) */
+/* Активное состояние кнопки */
 .cms-tb-btn.is-active {
     background: #0066cc;
     color: #ffffff;
@@ -135,6 +176,11 @@
 .tabler--clear-formatting {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m17 15l4 4m0-4l-4 4M7 6V5h11v1M7 19h4m2-14L9 19'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m17 15l4 4m0-4l-4 4M7 6V5h11v1M7 19h4m2-14L9 19'/%3E%3C/svg%3E");
+}
+
+.tabler--device-floppy {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'%3E%3Cpath d='M6 4h10l4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2'/%3E%3Cpath d='M10 14a2 2 0 1 0 4 0a2 2 0 1 0-4 0m4-10v4H8V4'/%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'%3E%3Cpath d='M6 4h10l4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2'/%3E%3Cpath d='M10 14a2 2 0 1 0 4 0a2 2 0 1 0-4 0m4-10v4H8V4'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* 2. Позиция карточки ревизий справа внизу */
@@ -306,4 +352,10 @@ body.cms-edit-mode .editable:not([id]) {
 
 body.cms-edit-mode .editable.edited {
     outline: 2px dashed #2ec4b6 !important;
+}
+
+/* Минимальная высота пустых li при редактировании */
+body.cms-edit-mode .editable li,
+body.cms-edit-mode li.editable {
+    min-height: 1em;
 }

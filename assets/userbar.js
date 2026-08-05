@@ -1,6 +1,7 @@
 (() => {
     const editedElements = new Set();
-    const blacklistedTags = ['IMG', 'A', 'VIDEO', 'CANVAS', 'AUDIO', 'INPUT', 'TEXTAREA'];
+    const blacklistedTags = ['VIDEO', 'CANVAS', 'AUDIO', 'INPUT', 'TEXTAREA'];
+    let currentActiveElement = null;
 
     const getCustomFilePath = () => {
         const el = document.querySelector('[data-filepath]');
@@ -44,7 +45,7 @@
         if (clickable) {
             e.preventDefault();
         }
-    }, true); // Вызов на фазе перехвата (capture)
+    }, true);
 
     document.addEventListener('DOMContentLoaded', () => {
         const customPath = getCustomFilePath();
@@ -75,42 +76,62 @@
         const toolbar = document.createElement('div');
         toolbar.id = 'cms-toolbar';
         toolbar.className = 'cms-glass-card';
+        toolbar.setAttribute('data-mode', 'text');
         toolbar.innerHTML = `
-            <button class="cms-tb-btn" data-cmd="bold" title="Жирный">
-                <span class="tabler-icon tabler--bold"></span>
-            </button>
-            <button class="cms-tb-btn" data-cmd="italic" title="Курсив">
-                <span class="tabler-icon tabler--italic"></span>
-            </button>
-            <button class="cms-tb-btn" data-cmd="underline" title="Подчеркнутый">
-                <span class="tabler-icon tabler--underline"></span>
-            </button>
-            <button class="cms-tb-btn" data-cmd="strikeThrough" title="Зачеркнутый">
-                <span class="tabler-icon tabler--strikethrough"></span>
-            </button>
-            
-            <div class="cms-tb-divider"></div>
-            
-            <button class="cms-tb-btn" data-cmd="createLink" title="Ссылка">
-                <span class="tabler-icon tabler--link"></span>
-            </button>
-            <button class="cms-tb-btn" data-cmd="span" title="Span">
-                <span class="cms-tb-text">span</span>
-            </button>
-            <button class="cms-tb-btn" data-cmd="removeFormat" title="Очистить форматирование">
-                <span class="tabler-icon tabler--clear-formatting"></span>
-            </button>
+            <!-- Группа текстового форматирования -->
+            <div class="cms-tb-group" data-group="text">
+                <button class="cms-tb-btn" data-cmd="bold" title="Жирный">
+                    <span class="tabler-icon tabler--bold"></span>
+                </button>
+                <button class="cms-tb-btn" data-cmd="italic" title="Курсив">
+                    <span class="tabler-icon tabler--italic"></span>
+                </button>
+                <button class="cms-tb-btn" data-cmd="underline" title="Подчеркнутый">
+                    <span class="tabler-icon tabler--underline"></span>
+                </button>
+                <button class="cms-tb-btn" data-cmd="strikeThrough" title="Зачеркнутый">
+                    <span class="tabler-icon tabler--strikethrough"></span>
+                </button>
+                
+                <div class="cms-tb-divider"></div>
+                
+                <button class="cms-tb-btn" data-cmd="createLink" title="Ссылка">
+                    <span class="tabler-icon tabler--link"></span>
+                </button>
+                <button class="cms-tb-btn" data-cmd="span" title="Span">
+                    <span class="cms-tb-text">span</span>
+                </button>
+                <button class="cms-tb-btn" data-cmd="removeFormat" title="Очистить форматирование">
+                    <span class="tabler-icon tabler--clear-formatting"></span>
+                </button>
+            </div>
+
+            <!-- Группа редактирования ссылки (A) -->
+            <div class="cms-tb-group" data-group="link">
+                <input type="text" id="cms-link-input" class="cms-tb-input" placeholder="https://example.com">
+            </div>
+
+            <!-- Группа загрузки изображения (IMG) -->
+            <div class="cms-tb-group" data-group="image">
+                <input type="file" id="cms-img-input" class="cms-tb-file" accept="image/*">
+            </div>
         `;
         document.body.appendChild(toolbar);
 
-        // Предотвращаем потерю фокуса при клике по кнопкам тулбара
-        toolbar.querySelectorAll('.cms-tb-btn').forEach(btn => {
-            btn.addEventListener('mousedown', (e) => {
+        // Предотвращаем потерю фокуса при клике по кнопкам тулбара (кроме инпутов)
+        toolbar.addEventListener('mousedown', (e) => {
+            if (!e.target.closest('input')) {
                 e.preventDefault();
+            }
+        });
+
+        // Обработка текстовых кнопок
+        toolbar.querySelectorAll('.cms-tb-btn[data-cmd]').forEach(btn => {
+            btn.addEventListener('click', () => {
                 const cmd = btn.getAttribute('data-cmd');
                 if (!cmd) return;
 
-                const activeEditable = getAncestorTag('editable') || document.activeElement.closest('.editable');
+                const activeEditable = currentActiveElement || document.activeElement.closest('.editable');
 
                 if (cmd === 'createLink') {
                     const existingLink = getAncestorTag('a');
@@ -150,23 +171,28 @@
                         range.insertNode(span);
                     }
 
-                    // Очищаем пустые спаны и склеиваем стоящие вплотную </span><span>
-                    if (activeEditable) {
-                        cleanupSpans(activeEditable);
-                    }
+                    if (activeEditable) cleanupSpans(activeEditable);
                 } else if (cmd === 'removeFormat') {
                     document.execCommand('removeFormat', false, null);
                     document.execCommand('unlink', false, null);
-                    if (activeEditable) {
-                        cleanupSpans(activeEditable);
-                    }
+                    if (activeEditable) cleanupSpans(activeEditable);
                 } else {
                     document.execCommand(cmd, false, null);
                 }
 
-                // Обновляем состояние подсветок кнопок
                 updateToolbarButtonStates();
             });
+        });
+
+        // Динамическое обновление href у ссылок на лету
+        const inputLink = toolbar.querySelector('#cms-link-input');
+        inputLink.addEventListener('input', () => {
+            if (currentActiveElement && currentActiveElement.tagName === 'A') {
+                currentActiveElement.setAttribute('href', inputLink.value.trim());
+                currentActiveElement.classList.add('edited');
+                editedElements.add(currentActiveElement.id);
+                document.getElementById('cms-btn-save').removeAttribute('disabled');
+            }
         });
 
         // 2. Бар управления
@@ -193,7 +219,10 @@
                 <span>Редактировать</span>
             </label>
 
-            <button class="cms-btn-save" id="cms-btn-save" disabled>Сохранить</button>
+            <button class="cms-btn-save" id="cms-btn-save" disabled>
+                <span class="tabler-icon tabler--device-floppy" style="vertical-align: middle; margin-right: 4px;"></span>
+                Сохранить
+            </button>
             <button class="cms-logout-btn" id="cms-btn-logout" title="Выйти ('${data.user}')">Выйти</button>
         `;
         document.body.appendChild(bar);
@@ -323,6 +352,35 @@
         });
     };
 
+    const activateToolbarForElement = (target) => {
+        const toolbar = document.getElementById('cms-toolbar');
+        if (!toolbar) return;
+
+        const tagName = target.tagName.toUpperCase();
+
+        if (blacklistedTags.includes(tagName)) {
+            toolbar.classList.remove('active');
+            return;
+        }
+
+        currentActiveElement = target;
+
+        if (tagName === 'IMG') {
+            toolbar.setAttribute('data-mode', 'image');
+        } else if (tagName === 'A') {
+            toolbar.setAttribute('data-mode', 'link');
+            const inputLink = toolbar.querySelector('#cms-link-input');
+            if (inputLink) {
+                inputLink.value = target.getAttribute('href') || '';
+            }
+        } else {
+            toolbar.setAttribute('data-mode', 'text');
+        }
+
+        toolbar.classList.add('active');
+        updateToolbarButtonStates();
+    };
+
     const initEditorEvents = () => {
         const toggle = document.getElementById('cms-toggle-edit');
         const btnSave = document.getElementById('cms-btn-save');
@@ -356,34 +414,27 @@
             }
         });
 
-        // Показ / скрытие тулбара с учётом контекста элементов
-        document.addEventListener('focusin', (e) => {
-            const target = e.target;
+        // Показ тулбара по клику (работает для любых элементов, включая IMG)
+        document.addEventListener('click', (e) => {
             if (!document.body.classList.contains('cms-edit-mode')) return;
 
-            if (target.classList.contains('editable') && target.id) {
-                const tagName = target.tagName.toUpperCase();
-
-                // 1. Проверяем чёрный список
-                if (blacklistedTags.includes(tagName)) {
-                    toolbar.classList.remove('active');
-                    return;
-                }
-
-                // 2. Записываем имя тега
-                toolbar.setAttribute('data-tag', tagName.toLowerCase());
-                toolbar.classList.add('active');
-                updateToolbarButtonStates();
+            const target = e.target.closest('.editable[id]');
+            if (target) {
+                activateToolbarForElement(target);
+            } else if (!e.target.closest('#cms-toolbar, #cms-userbar, #cms-revisions')) {
+                toolbar.classList.remove('active');
+                currentActiveElement = null;
             }
         });
 
-        document.addEventListener('focusout', () => {
-            setTimeout(() => {
-                const activeEl = document.activeElement;
-                if (!activeEl || !activeEl.classList.contains('editable') || !activeEl.id) {
-                    toolbar.classList.remove('active');
-                }
-            }, 100);
+        // Показ тулбара по фокусу (для таба с клавиатуры и т.д.)
+        document.addEventListener('focusin', (e) => {
+            if (!document.body.classList.contains('cms-edit-mode')) return;
+
+            const target = e.target.closest('.editable[id]');
+            if (target) {
+                activateToolbarForElement(target);
+            }
         });
 
         document.addEventListener('input', (e) => {
