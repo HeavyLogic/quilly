@@ -8,6 +8,17 @@
         return el ? el.getAttribute('data-filepath').trim() : '';
     };
 
+    // Установка активного целевого элемента с визуальной подсветкой
+    const setActiveElement = (el) => {
+        if (currentActiveElement && currentActiveElement !== el) {
+            currentActiveElement.classList.remove('cms-active-target');
+        }
+        currentActiveElement = el;
+        if (currentActiveElement) {
+            currentActiveElement.classList.add('cms-active-target');
+        }
+    };
+
     // Хелпер: ищет родительский тег заданного типа от текущего выделения до границы .editable
     const getAncestorTag = (tagName) => {
         const sel = window.getSelection();
@@ -38,7 +49,7 @@
         if (!document.body.classList.contains('cms-edit-mode')) return;
 
         // Разрешаем клики внутри элементов интерфейса CMS
-        if (e.target.closest('#cms-userbar, #cms-revisions, #cms-toolbar')) return;
+        if (e.target.closest('#cms-userbar, #cms-revisions, #cms-toolbar, #cms-img-modal')) return;
 
         // Перехватываем ссылки, кнопки и сабмиты страниц
         const clickable = e.target.closest('a, button, input[type="submit"], input[type="button"]');
@@ -108,6 +119,7 @@
 
             <!-- Группа редактирования ссылки (A) -->
             <div class="cms-tb-group" data-group="link">
+                <label for="cms-link-input" class="cms-tb-label">Ссылка:</label>
                 <input type="text" id="cms-link-input" class="cms-tb-input" placeholder="https://example.com">
             </div>
 
@@ -117,6 +129,16 @@
             </div>
         `;
         document.body.appendChild(toolbar);
+
+        // 1.1 Модальное окно выбора из нескольких наложенных картинок
+        const imgModal = document.createElement('div');
+        imgModal.id = 'cms-img-modal';
+        imgModal.className = 'cms-glass-card';
+        imgModal.innerHTML = `
+            <div class="cms-img-modal-header">Выберите изображение:</div>
+            <div class="cms-img-modal-list"></div>
+        `;
+        document.body.appendChild(imgModal);
 
         // Предотвращаем потерю фокуса при клике по кнопкам тулбара (кроме инпутов)
         toolbar.addEventListener('mousedown', (e) => {
@@ -360,10 +382,11 @@
 
         if (blacklistedTags.includes(tagName)) {
             toolbar.classList.remove('active');
+            setActiveElement(null);
             return;
         }
 
-        currentActiveElement = target;
+        setActiveElement(target);
 
         if (tagName === 'IMG') {
             toolbar.setAttribute('data-mode', 'image');
@@ -381,10 +404,38 @@
         updateToolbarButtonStates();
     };
 
+    // Окно выбора из списка наложенных друг на друга картинок
+    const showImagePickerModal = (imgs) => {
+        const modal = document.getElementById('cms-img-modal');
+        if (!modal) return;
+
+        const list = modal.querySelector('.cms-img-modal-list');
+        list.innerHTML = '';
+
+        imgs.forEach(img => {
+            const titleText = img.getAttribute('alt') || img.src.split('/').pop() || 'Изображение';
+
+            const item = document.createElement('div');
+            item.className = 'cms-img-choice';
+            item.title = titleText;
+            item.innerHTML = `<img src="${img.src}" alt="${titleText}">`;
+
+            item.addEventListener('click', () => {
+                modal.classList.remove('active');
+                activateToolbarForElement(img);
+            });
+
+            list.appendChild(item);
+        });
+
+        modal.classList.add('active');
+    };
+
     const initEditorEvents = () => {
         const toggle = document.getElementById('cms-toggle-edit');
         const btnSave = document.getElementById('cms-btn-save');
         const toolbar = document.getElementById('cms-toolbar');
+        const imgModal = document.getElementById('cms-img-modal');
 
         toggle.addEventListener('change', function() {
             const isEdit = this.checked;
@@ -394,6 +445,8 @@
             } else {
                 document.body.classList.remove('cms-edit-mode');
                 toolbar.classList.remove('active');
+                if (imgModal) imgModal.classList.remove('active');
+                setActiveElement(null);
                 cleanupEmptyBr();
             }
 
@@ -414,25 +467,50 @@
             }
         });
 
-        // Показ тулбара по клику (работает для любых элементов, включая IMG)
+        // Главный обработчик кликов для выбора элементов (включая элементы с наложением)
         document.addEventListener('click', (e) => {
             if (!document.body.classList.contains('cms-edit-mode')) return;
 
+            // Если кликнули по интерфейсу CMS — ничего не делаем
+            if (e.target.closest('#cms-toolbar, #cms-userbar, #cms-revisions, #cms-img-modal')) return;
+
+            // Закрываем модальное окно выбора картинок при клике в любое другое место
+            if (imgModal) imgModal.classList.remove('active');
+
+            // 1. Проверяем слои в точке клика на наличие нескольких IMG.editable
+            const hitElements = document.elementsFromPoint(e.clientX, e.clientY);
+            const hitEditableImgs = hitElements.filter(el => 
+                el.tagName === 'IMG' && 
+                el.classList.contains('editable') && 
+                el.id
+            );
+
+            if (hitEditableImgs.length > 1) {
+                toolbar.classList.remove('active');
+                setActiveElement(null);
+                showImagePickerModal(hitEditableImgs);
+                return;
+            } else if (hitEditableImgs.length === 1) {
+                activateToolbarForElement(hitEditableImgs[0]);
+                return;
+            }
+
+            // 2. Стандартный клик по единичному элементу
             const target = e.target.closest('.editable[id]');
             if (target) {
                 activateToolbarForElement(target);
-            } else if (!e.target.closest('#cms-toolbar, #cms-userbar, #cms-revisions')) {
+            } else {
                 toolbar.classList.remove('active');
-                currentActiveElement = null;
+                setActiveElement(null);
             }
         });
 
-        // Показ тулбара по фокусу (для таба с клавиатуры и т.д.)
+        // Показ тулбара по фокусу (для навигации с клавиатуры)
         document.addEventListener('focusin', (e) => {
             if (!document.body.classList.contains('cms-edit-mode')) return;
 
             const target = e.target.closest('.editable[id]');
-            if (target) {
+            if (target && target !== currentActiveElement) {
                 activateToolbarForElement(target);
             }
         });
