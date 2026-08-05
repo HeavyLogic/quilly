@@ -93,17 +93,6 @@
     letter-spacing: -0.5px;
 }
 
-/* Скрытие контекстных кнопок по умолчанию */
-.cms-tb-btn[data-show-for] {
-    display: none;
-}
-
-/* Показываем кнопку Li только если активен UL или OL */
-#cms-toolbar[data-tag="ul"] .cms-tb-btn[data-show-for="list"],
-#cms-toolbar[data-tag="ol"] .cms-tb-btn[data-show-for="list"] {
-    display: flex;
-}
-
 /* ===================================================
    ИКОНКИ TABLER (CSS MASK DATA URI)
    =================================================== */
@@ -146,11 +135,6 @@
 .tabler--clear-formatting {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m17 15l4 4m0-4l-4 4M7 6V5h11v1M7 19h4m2-14L9 19'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m17 15l4 4m0-4l-4 4M7 6V5h11v1M7 19h4m2-14L9 19'/%3E%3C/svg%3E");
-}
-
-.tabler--list-item {
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01'/%3E%3C/svg%3E");
-    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01'/%3E%3C/svg%3E");
 }
 
 /* 2. Позиция карточки ревизий справа внизу */

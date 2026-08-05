@@ -1,11 +1,50 @@
 (() => {
     const editedElements = new Set();
-    const blacklistedTags = ['IMG', 'VIDEO', 'CANVAS', 'AUDIO', 'INPUT', 'TEXTAREA'];
+    const blacklistedTags = ['IMG', 'A', 'VIDEO', 'CANVAS', 'AUDIO', 'INPUT', 'TEXTAREA'];
 
     const getCustomFilePath = () => {
         const el = document.querySelector('[data-filepath]');
         return el ? el.getAttribute('data-filepath').trim() : '';
     };
+
+    // Хелпер: ищет родительский тег заданного типа от текущего выделения до границы .editable
+    const getAncestorTag = (tagName) => {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return null;
+        let node = sel.getRangeAt(0).commonAncestorContainer;
+        if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+        
+        while (node && node !== document.body && !node.classList?.contains('editable')) {
+            if (node.tagName && node.tagName.toLowerCase() === tagName.toLowerCase()) {
+                return node;
+            }
+            node = node.parentNode;
+        }
+        return null;
+    };
+
+    // Чистка пустых спанов и склейка смежных </span><span>
+    const cleanupSpans = (editableEl) => {
+        if (!editableEl) return;
+        // 1. Стираем пустые <span></span>
+        editableEl.innerHTML = editableEl.innerHTML.replace(/<span[^>]*>\s*<\/span>/gi, '');
+        // 2. Склеиваем стоящие рядом </span><span>
+        editableEl.innerHTML = editableEl.innerHTML.replace(/<\/span>(\s*)<span[^>]*>/gi, '$1');
+    };
+
+    // Блокировка кликов по кнопкам и ссылкам страницы в режиме редактирования
+    document.addEventListener('click', (e) => {
+        if (!document.body.classList.contains('cms-edit-mode')) return;
+
+        // Разрешаем клики внутри элементов интерфейса CMS
+        if (e.target.closest('#cms-userbar, #cms-revisions, #cms-toolbar')) return;
+
+        // Перехватываем ссылки, кнопки и сабмиты страниц
+        const clickable = e.target.closest('a, button, input[type="submit"], input[type="button"]');
+        if (clickable) {
+            e.preventDefault();
+        }
+    }, true); // Вызов на фазе перехвата (capture)
 
     document.addEventListener('DOMContentLoaded', () => {
         const customPath = getCustomFilePath();
@@ -55,15 +94,11 @@
             <button class="cms-tb-btn" data-cmd="createLink" title="Ссылка">
                 <span class="tabler-icon tabler--link"></span>
             </button>
-            <button class="cms-tb-btn" data-cmd="span" title="Обернуть в span">
+            <button class="cms-tb-btn" data-cmd="span" title="Span">
                 <span class="cms-tb-text">span</span>
             </button>
             <button class="cms-tb-btn" data-cmd="removeFormat" title="Очистить форматирование">
                 <span class="tabler-icon tabler--clear-formatting"></span>
-            </button>
-            
-            <button class="cms-tb-btn" data-show-for="list" data-cmd="insertLi" title="Добавить элемент списка (li)">
-                <span class="tabler-icon tabler--list-item"></span>
             </button>
         `;
         document.body.appendChild(toolbar);
@@ -75,24 +110,61 @@
                 const cmd = btn.getAttribute('data-cmd');
                 if (!cmd) return;
 
+                const activeEditable = getAncestorTag('editable') || document.activeElement.closest('.editable');
+
                 if (cmd === 'createLink') {
-                    const url = prompt('Введите URL ссылки:');
-                    if (url) document.execCommand('createLink', false, url);
+                    const existingLink = getAncestorTag('a');
+                    if (existingLink) {
+                        document.execCommand('unlink', false, null);
+                    } else {
+                        const url = prompt('Введите URL ссылки:');
+                        if (url) document.execCommand('createLink', false, url);
+                    }
+                } else if (cmd === 'span') {
+                    const existingSpan = getAncestorTag('span');
+                    const selection = window.getSelection();
+
+                    if (existingSpan) {
+                        // Снимаем span (unwrap)
+                        const parent = existingSpan.parentNode;
+                        while (existingSpan.firstChild) {
+                            parent.insertBefore(existingSpan.firstChild, existingSpan);
+                        }
+                        parent.removeChild(existingSpan);
+                    } else if (selection.rangeCount > 0 && !selection.isCollapsed) {
+                        // Оборачиваем в span
+                        const range = selection.getRangeAt(0);
+                        const span = document.createElement('span');
+                        
+                        span.appendChild(range.extractContents());
+
+                        // Страховка от вложенности: вынимаем внутренние span
+                        span.querySelectorAll('span').forEach(innerSpan => {
+                            const parent = innerSpan.parentNode;
+                            while (innerSpan.firstChild) {
+                                parent.insertBefore(innerSpan.firstChild, innerSpan);
+                            }
+                            parent.removeChild(innerSpan);
+                        });
+
+                        range.insertNode(span);
+                    }
+
+                    // Очищаем пустые спаны и склеиваем стоящие вплотную </span><span>
+                    if (activeEditable) {
+                        cleanupSpans(activeEditable);
+                    }
                 } else if (cmd === 'removeFormat') {
                     document.execCommand('removeFormat', false, null);
                     document.execCommand('unlink', false, null);
-                } else if (cmd === 'span') {
-                    const selection = window.getSelection();
-                    if (selection.rangeCount > 0 && !selection.isCollapsed) {
-                        const range = selection.getRangeAt(0);
-                        const span = document.createElement('span');
-                        range.surroundContents(span);
+                    if (activeEditable) {
+                        cleanupSpans(activeEditable);
                     }
                 } else {
                     document.execCommand(cmd, false, null);
                 }
 
-                // Пересчитываем подсветку кнопок сразу после команды
+                // Обновляем состояние подсветок кнопок
                 updateToolbarButtonStates();
             });
         });
@@ -159,32 +231,32 @@
         initRollbackEvents();
     };
 
-    // Проверка активности тегов под кареткой (жирный, курсив, ссылка и т.д.)
+    // Проверка активности тегов под кареткой
     const updateToolbarButtonStates = () => {
         const toolbar = document.getElementById('cms-toolbar');
         if (!toolbar || !toolbar.classList.contains('active')) return;
 
-        const commandMap = {
+        const nativeCommands = {
             'bold': 'bold',
             'italic': 'italic',
             'underline': 'underline',
-            'strikeThrough': 'strikeThrough',
-            'createLink': 'createLink'
+            'strikeThrough': 'strikeThrough'
         };
 
         toolbar.querySelectorAll('.cms-tb-btn[data-cmd]').forEach(btn => {
             const cmd = btn.getAttribute('data-cmd');
-            if (commandMap[cmd]) {
+
+            if (nativeCommands[cmd]) {
                 try {
-                    const isActive = document.queryCommandState(commandMap[cmd]);
-                    if (isActive) {
-                        btn.classList.add('is-active');
-                    } else {
-                        btn.classList.remove('is-active');
-                    }
+                    const isActive = document.queryCommandState(nativeCommands[cmd]);
+                    btn.classList.toggle('is-active', isActive);
                 } catch (e) {
                     btn.classList.remove('is-active');
                 }
+            } else if (cmd === 'createLink') {
+                btn.classList.toggle('is-active', !!getAncestorTag('a'));
+            } else if (cmd === 'span') {
+                btn.classList.toggle('is-active', !!getAncestorTag('span'));
             }
         });
     };
@@ -298,7 +370,7 @@
                     return;
                 }
 
-                // 2. Записываем имя тега для CSS-фильтрации кнопок
+                // 2. Записываем имя тега
                 toolbar.setAttribute('data-tag', tagName.toLowerCase());
                 toolbar.classList.add('active');
                 updateToolbarButtonStates();
