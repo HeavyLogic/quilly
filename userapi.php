@@ -197,7 +197,26 @@ switch ($action) {
             foreach ($changes as $id => $payload) {
                 $element = $doc->getElementById($id);
                 if ($element) {
-                    if (isset($payload['text'])) {
+                    if (isset($payload['html'])) {
+                        // 1. Очищаем старые дочерние элементы
+                        while ($element->firstChild) {
+                            $element->removeChild($element->firstChild);
+                        }
+
+                        // 2. Парсим новый HTML-фрагмент
+                        $fragDoc = Dom\HTMLDocument::createFromString(
+                            '<!DOCTYPE html><html><body><div id="cms-temp-fragment-wrapper">' . $payload['html'] . '</div></body></html>',
+                            LIBXML_NOERROR
+                        );
+
+                        $wrapper = $fragDoc->getElementById('cms-temp-fragment-wrapper');
+                        if ($wrapper) {
+                            foreach ($wrapper->childNodes as $childNode) {
+                                $importedNode = $doc->importNode($childNode, true);
+                                $element->appendChild($importedNode);
+                            }
+                        }
+                    } elseif (isset($payload['text'])) {
                         $element->textContent = $payload['text'];
                     }
                 }
