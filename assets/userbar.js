@@ -1,5 +1,6 @@
 (() => {
     const editedElements = new Set();
+    const stagedImageFiles = new Map(); // Хранилище файлов для будущей загрузки
     const blacklistedTags = ['VIDEO', 'CANVAS', 'AUDIO', 'INPUT', 'TEXTAREA'];
     let currentActiveElement = null;
 
@@ -144,6 +145,24 @@
         toolbar.addEventListener('mousedown', (e) => {
             if (!e.target.closest('input')) {
                 e.preventDefault();
+            }
+        });
+
+        // Обработка выбора нового файла изображения (Мгновенный превью)
+        const inputImg = toolbar.querySelector('#cms-img-input');
+        inputImg.addEventListener('change', () => {
+            const file = inputImg.files[0];
+            if (file && currentActiveElement && currentActiveElement.tagName === 'IMG') {
+                // Мгновенно подменяем src картинки прямо на странице для предпросмотра
+                const previewUrl = URL.createObjectURL(file);
+                currentActiveElement.src = previewUrl;
+
+                // Запоминаем файл и помечаем элемент как изменённый
+                currentActiveElement.classList.add('edited');
+                editedElements.add(currentActiveElement.id);
+                stagedImageFiles.set(currentActiveElement.id, file);
+
+                document.getElementById('cms-btn-save').removeAttribute('disabled');
             }
         });
 

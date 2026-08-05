@@ -57,48 +57,105 @@ function resolveTargetRelPath(string $customFilePath, string $url, string $rootD
     return $cleanPath;
 }
 
-// Бэкап файла перед изменением
-function makeRevision(string $fullPath, string $targetRelPath, string $rootDir): void {
+// Поиск и нормализация путей всех img.editable
+function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $rootDir): array {
+    $imageRelPaths = [];
+
+    $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
+    $siteScheme = parse_url($url, PHP_URL_SCHEME) ?? 'http';
+    $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
+
+    $images = $doc->querySelectorAll('img.editable');
+    $docModified = false;
+
+    foreach ($images as $img) {
+        $src = trim($img->getAttribute('src') ?? '');
+        if (!$src) continue;
+
+        // Если в src зашит абсолютный URL текущего сайта — убираем домен, делаем относительным
+        if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
+            $src = substr($src, strlen($siteBaseUrl));
+            $src = ltrim($src, '/');
+            $img->setAttribute('src', $src);
+            $docModified = true;
+        }
+
+        // Пропускаем внешние абсолютные ссылки (http://, https://, //)
+        if (preg_match('#^(https?:)?//#i', $src)) {
+            continue;
+        }
+
+        $cleanRelPath = ltrim($src, '/');
+        // Очищаем от возможных GET-параметров (?v=123)
+        $cleanRelPath = parse_url($cleanRelPath, PHP_URL_PATH) ?? $cleanRelPath;
+
+        $fullImgPath = $rootDir . '/' . $cleanRelPath;
+        if (file_exists($fullImgPath) && is_file($fullImgPath)) {
+            $imageRelPaths[$cleanRelPath] = $fullImgPath;
+        }
+    }
+
+    // Если пришлось исправить абсолютные ссылки на относительные — сохраняем HTML
+    if ($docModified) {
+        $doc->saveHtmlFile($doc->uri);
+    }
+
+    return $imageRelPaths;
+}
+
+// Создание ZIP-ревизии (HTML + все редактируемые картинки)
+function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, string $url = ''): void {
     if (!file_exists($fullPath)) return;
 
-    $lastModTime = @filemtime($fullPath);
-    if (!$lastModTime) $lastModTime = time();
-
+    $lastModTime = @filemtime($fullPath) ?: time();
     $dateStr = date('Y-m-d_H-i-s', $lastModTime);
-    $revDir = $rootDir . '/restricted/revisions/' . $targetRelPath;
 
-    if (!is_dir($revDir)) {
-        @mkdir($revDir, 0755, true);
+    $revParentDir = $rootDir . '/restricted/revisions/' . $targetRelPath;
+    if (!is_dir($revParentDir)) {
+        @mkdir($revParentDir, 0755, true);
     }
 
-    $ext = pathinfo($targetRelPath, PATHINFO_EXTENSION);
-    if (!$ext) $ext = 'html';
+    $zipPath = $revParentDir . '/' . $dateStr . '.zip';
+    if (file_exists($zipPath)) return;
 
-    $backupFilePath = $revDir . '/' . $dateStr . '.' . $ext;
+    // Парсим HTML и собираем пути к редактируемым картинкам
+    $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
+    $imagePaths = getEditableImagesPaths($doc, $url, $rootDir);
 
-    if (!file_exists($backupFilePath)) {
-        @copy($fullPath, $backupFilePath);
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        return;
     }
 
-    $files = @glob($revDir . '/*.' . $ext);
-    if (is_array($files) && count($files) > 10) {
-        sort($files);
-        while (count($files) > 10) {
-            $oldestFile = array_shift($files);
-            if (file_exists($oldestFile)) {
-                @unlink($oldestFile);
+    // 1. Пакуем сам HTML-файл
+    $zip->addFile($fullPath, $targetRelPath);
+
+    // 2. Пакуем все существующие img.editable с сохранением относительных путей
+    foreach ($imagePaths as $relPath => $absPath) {
+        $zip->addFile($absPath, $relPath);
+    }
+
+    $zip->close();
+
+    // Ротация бэкапов (не более 10 zip-архивов)
+    $zipFiles = @glob($revParentDir . '/*.zip');
+    if (is_array($zipFiles) && count($zipFiles) > 10) {
+        sort($zipFiles);
+        while (count($zipFiles) > 10) {
+            $oldestZip = array_shift($zipFiles);
+            if (file_exists($oldestZip)) {
+                @unlink($oldestZip);
             }
         }
     }
 }
 
-// Сканирование списка ревизий
+// Сканирование списка ZIP-ревизий
 function getRevisionsList(string $targetRelPath, string $rootDir): array {
-    $revDir = $rootDir . '/restricted/revisions/' . $targetRelPath;
-    if (!is_dir($revDir)) return [];
+    $parentDir = $rootDir . '/restricted/revisions/' . $targetRelPath;
+    if (!is_dir($parentDir)) return [];
 
-    $ext = pathinfo($targetRelPath, PATHINFO_EXTENSION) ?: 'html';
-    $files = @glob($revDir . '/*.' . $ext);
+    $files = @glob($parentDir . '/*.zip');
     if (!$files) return [];
 
     // Сортируем от новых к старым
@@ -107,7 +164,8 @@ function getRevisionsList(string $targetRelPath, string $rootDir): array {
     $list = [];
     foreach ($files as $filePath) {
         $filename = basename($filePath);
-        $time = @filemtime($filePath);
+        $time = @filemtime($filePath) ?: time();
+
         $list[] = [
             'filename' => $filename,
             'date'     => date('d.m.Y H:i:s', $time)
@@ -190,20 +248,22 @@ switch ($action) {
         if (empty($changes)) responseSuccess(['message' => 'Нет изменений']);
 
         try {
-            makeRevision($fullPath, $targetRelPath, $rootDir);
+            // 1. Создаем ZIP-ревизию (HTML + изображения)
+            makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
+            // 2. Обновляем HTML-файл
             $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
 
             foreach ($changes as $id => $payload) {
                 $element = $doc->getElementById($id);
                 if ($element) {
                     if (isset($payload['html'])) {
-                        // 1. Очищаем старые дочерние элементы
+                        // Очищаем старые дочерние элементы
                         while ($element->firstChild) {
                             $element->removeChild($element->firstChild);
                         }
 
-                        // 2. Парсим новый HTML-фрагмент
+                        // Парсим новый HTML-фрагмент
                         $fragDoc = Dom\HTMLDocument::createFromString(
                             '<!DOCTYPE html><html><body><div id="cms-temp-fragment-wrapper">' . $payload['html'] . '</div></body></html>',
                             LIBXML_NOERROR
@@ -229,7 +289,7 @@ switch ($action) {
             responseError('Ошибка сохранения PHP: ' . $e->getMessage());
         }
 
-    // 4. Откат к выбранной ревизии
+    // 4. Откат к выбранной ZIP-ревизии
     case 'rollback_revision':
         $user = getAuthUser($dbPath);
         if (!$user) responseError('Доступ запрещен');
@@ -247,22 +307,37 @@ switch ($action) {
         $targetRelPath = resolveTargetRelPath($customFilePath, $url, $rootDir);
         $fullPath = $rootDir . '/' . $targetRelPath;
 
-        $revFilePath = $rootDir . '/restricted/revisions/' . $targetRelPath . '/' . $revisionFilename;
+        $revZipPath = $rootDir . '/restricted/revisions/' . $targetRelPath . '/' . $revisionFilename;
 
-        if (!file_exists($revFilePath)) {
-            responseError('Файл ревизии не найден');
+        if (!file_exists($revZipPath)) {
+            responseError('Файл ревизии не найден: ' . $revisionFilename);
         }
 
         try {
-            // 1. Бэкапим текущее состояние перед откатом
-            makeRevision($fullPath, $targetRelPath, $rootDir);
+            // 1. Создаем бэкап ТЕКУЩЕГО живого состояния перед откатом
+            makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
-            // 2. Переносим (rename) ревизию на место текущего живого файла
-            if (!rename($revFilePath, $fullPath)) {
-                responseError('Не удалось применить файл ревизии');
+            // 2. Находим картинки текущей живой версии
+            $currentDoc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
+            $currentImages = getEditableImagesPaths($currentDoc, $url, $rootDir);
+
+            // 3. Безопасно удаляем с диска текущий живой HTML и его живые картинки
+            @unlink($fullPath);
+            foreach ($currentImages as $relPath => $absPath) {
+                if (file_exists($absPath)) {
+                    @unlink($absPath);
+                }
             }
 
-            responseSuccess(['message' => 'Откат успешно выполнен']);
+            // 4. Распаковываем ZIP-архив целевой ревизии в корень сайта
+            $zip = new ZipArchive();
+            if ($zip->open($revZipPath) === true) {
+                $zip->extractTo($rootDir);
+                $zip->close();
+                responseSuccess(['message' => 'Откат успешно выполнен']);
+            } else {
+                responseError('Не удалось открыть ZIP-архив ревизии');
+            }
         } catch (Throwable $e) {
             responseError('Ошибка отката: ' . $e->getMessage());
         }
