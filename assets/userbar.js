@@ -121,7 +121,7 @@
     });
 
     const renderUserbar = (data) => {
-        // Подключаем стили
+        // Подключаем стили ТОЛЬКО для авторизованных пользователей
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = '/admin/assets/userbar.css';
@@ -162,8 +162,8 @@
         }
 
         userbarContainer.innerHTML = `
-            <!-- 1.1 Выплывающий тулбар форматирования -->
-            <div id="cms-toolbar" class="cms-glass-card" data-mode="text">
+            <!-- 1.1 Выплывающий тулбар форматирования (стартовая прозрачность задана инлайн) -->
+            <div id="cms-toolbar" class="cms-glass-card" data-mode="text" style="opacity: 0; pointer-events: none;">
                 <div class="cms-tb-group" data-group="text">
                     <button class="cms-tb-btn" data-cmd="bold" title="Жирный">
                         <span class="tabler-icon tabler--bold"></span>
@@ -201,17 +201,16 @@
                 </div>
             </div>
 
-            <!-- 1.2 Выплывающий блок прогресса загрузки -->
-            <div id="cms-progress-bar" class="cms-glass-card">
+            <!-- 1.2 Выплывающий блок прогресса загрузки (стартовая прозрачность задана инлайн) -->
+            <div id="cms-progress-bar" class="cms-glass-card" style="opacity: 0; pointer-events: none;">
                 <span class="cms-progress-label" id="cms-progress-label">Загрузка изображений (0/0)</span>
                 <div class="cms-progress-track">
                     <div class="cms-progress-fill" id="cms-progress-fill"></div>
                 </div>
             </div>
 
-            <!-- 1.3 Всплывающий список ревизий -->
-            <div id="cms-revisions-pop" class="cms-glass-card">
-                <div class="revisions-pop-header">История ревизий</div>
+            <!-- 1.3 Всплывающий список ревизий (стартовая прозрачность задана инлайн) -->
+            <div id="cms-revisions-pop" class="cms-glass-card" style="opacity: 0; pointer-events: none;">
                 <ul>${revItemsHtml}</ul>
             </div>
 
@@ -568,14 +567,18 @@
 
         // Главный обработчик кликов для выбора элементов
         document.addEventListener('click', (e) => {
+            // Закрываем окно ревизий при клике в любое место (независимо от режима редактирования!)
+            if (revsPop && !e.target.closest('#cms-btn-revs, #cms-revisions-pop')) {
+                revsPop.classList.remove('active');
+            }
+
             if (!document.body.classList.contains('cms-edit-mode')) return;
 
             // Разрешаем клики внутри элементов интерфейса CMS
             if (e.target.closest('#cms-userbar-container, #cms-img-modal')) return;
 
-            // Закрываем модальное окно выбора картинок и окно ревизий
+            // Закрываем модальное окно выбора картинок
             if (imgModal) imgModal.classList.remove('active');
-            if (revsPop) revsPop.classList.remove('active');
 
             // Страховка от закрытия тулбара при протяжке выделения мышкой за границы элемента
             const sel = window.getSelection();

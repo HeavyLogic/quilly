@@ -58,8 +58,8 @@
 
 /* Автоматически показываем тулбар, если на странице есть активный элемент */
 body.cms-edit-mode:has(.editable.cms-active-target) #cms-toolbar {
-    opacity: 1;
-    pointer-events: auto;
+    opacity: 1 !important;
+    pointer-events: auto !important;
     transform: translateX(-50%) translateY(0);
 }
 
@@ -87,8 +87,8 @@ body.cms-ajax-loading #cms-toolbar {
 }
 
 #cms-progress-bar.active {
-    opacity: 1;
-    pointer-events: auto;
+    opacity: 1 !important;
+    pointer-events: auto !important;
     transform: translateX(-50%) translateY(0);
 }
 
@@ -116,7 +116,7 @@ body.cms-ajax-loading #cms-toolbar {
     transition: width 0.3s ease;
 }
 
-/* 1.3. Всплывающее окно ревизий (по центру бара) */
+/* 1.3. Всплывающее окно ревизий */
 #cms-revisions-pop {
     position: absolute;
     bottom: calc(100% + var(--cms-popup-gap));
@@ -132,8 +132,8 @@ body.cms-ajax-loading #cms-toolbar {
 }
 
 #cms-revisions-pop.active {
-    opacity: 1;
-    pointer-events: auto;
+    opacity: 1 !important;
+    pointer-events: auto !important;
     transform: translateX(-50%) translateY(0);
 }
 
@@ -577,9 +577,7 @@ body.cms-edit-mode .editable.edited {
 
 /* Активный выбранный элемент прямо сейчас */
 body.cms-edit-mode .editable.cms-active-target {
-    outline: 3px solid #ff007f !important;
-    outline-offset: 3px;
-    box-shadow: 0 0 10px rgba(255, 0, 127, 0.5) !important;
+    outline: 2px solid #2ec4b6 !important;
 }
 
 /* Минимальная высота пустых li при редактировании */
@@ -604,7 +602,7 @@ body.cms-edit-mode li.editable {
         display: none !important;
     }
 
-    /* Показываем иконку выходы вместо текста */
+    /* Показываем иконку выхода вместо текста */
     .cms-logout-btn .tabler--logout {
         display: inline-block !important;
     }
