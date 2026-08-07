@@ -24,6 +24,23 @@ function writeDebugLog(string $message): void {
     @file_put_contents($logFile, $formattedMessage, FILE_APPEND);
 }
 
+// Логгер для отладки создания и отката ревизий
+function writeRevisionDebugLog(string $message): void {
+    if (!defined('CMS_DEBUG') || !CMS_DEBUG) return;
+
+    $rootDir = realpath(__DIR__ . '/../');
+    $debugDir = $rootDir . '/debug';
+    if (!is_dir($debugDir)) {
+        @mkdir($debugDir, 0755, true);
+    }
+
+    $logFile = $debugDir . '/revisions.txt';
+    $timestamp = date('Y-m-d H:i:s');
+    $formattedMessage = "[{$timestamp}] {$message}\n";
+
+    @file_put_contents($logFile, $formattedMessage, FILE_APPEND);
+}
+
 // --- ХЕЛПЕРЫ ОТВЕТОВ ---
 
 function responseSuccess(array $data = []): void {
@@ -96,8 +113,7 @@ function resolveLocalImagePath(string $src, string $url, string $rootDir): ?stri
         return null;
     }
 
-    $cleanRelPath = ltrim($src, '/');
-    $cleanRelPath = parse_url($cleanRelPath, PHP_URL_PATH) ?? $cleanRelPath;
+    $cleanRelPath = ltrim(parse_url($src, PHP_URL_PATH) ?? $src, '/');
     $fullPath = $rootDir . '/' . $cleanRelPath;
 
     if (file_exists($fullPath) && is_file($fullPath)) {
@@ -141,6 +157,7 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
             $origWidth = $image->getImageWidth();
             $origHeight = $image->getImageHeight();
 
+            // Пропорциональный ресайз
             if ($origWidth > $maxWidth || $origHeight > $maxHeight) {
                 $ratio = min($maxWidth / $origWidth, $maxHeight / $origHeight);
                 $newWidth = (int)($origWidth * $ratio);
@@ -187,6 +204,7 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
         $origWidth = imagesx($image);
         $origHeight = imagesy($image);
 
+        // Пропорциональный ресайз
         if ($origWidth > $maxWidth || $origHeight > $maxHeight) {
             $ratio = min($maxWidth / $origWidth, $maxHeight / $origHeight);
             $newWidth = (int)($origWidth * $ratio);
@@ -220,6 +238,7 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
             return false;
         }
 
+        // Проверка keep_if_larger
         if ($webpSize > $origSize) {
             writeDebugLog("Условие keep_if_larger: Сконвертированный WebP ({$webpSize} байт) ВЕСИТ БОЛЬШЕ оригинала ({$origSize} байт). Отмена конвертации, возвращаем оригинал.");
             @unlink($outputWebpPath);
@@ -234,8 +253,8 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
     return false;
 }
 
-// Поиск и нормализация путей всех img.editable
-function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $rootDir): array {
+// Поиск, нормализация путей в HTML (приведение к /assets/...) и сборка путей для ZIP
+function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $rootDir, string $fullPath): array {
     $imageRelPaths = [];
 
     $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
@@ -249,28 +268,37 @@ function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $root
         $src = trim($img->getAttribute('src') ?? '');
         if (!$src) continue;
 
+        // 1. Если в src прописан абсолютный URL текущего сайта — срезаем домен
         if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
             $src = substr($src, strlen($siteBaseUrl));
-            $src = ltrim($src, '/');
-            $img->setAttribute('src', $src);
-            $docModified = true;
         }
 
+        // 2. Пропускаем внешние ссылки на чужие домены
         if (preg_match('#^(https?:)?//#i', $src)) {
             continue;
         }
 
-        $cleanRelPath = ltrim($src, '/');
-        $cleanRelPath = parse_url($cleanRelPath, PHP_URL_PATH) ?? $cleanRelPath;
+        // 3. Гарантируем ведущий слэш для HTML атрибута src (например, /assets/img.webp)
+        $cleanPath = parse_url($src, PHP_URL_PATH) ?? $src;
+        $htmlSrc = '/' . ltrim($cleanPath, '/');
 
-        $fullImgPath = $rootDir . '/' . $cleanRelPath;
+        if ($img->getAttribute('src') !== $htmlSrc) {
+            $img->setAttribute('src', $htmlSrc);
+            $docModified = true;
+        }
+
+        // 4. Формируем путь для ZIP (без ведущего слэша) и путь на диске
+        $zipRelPath = ltrim($cleanPath, '/');
+        $fullImgPath = $rootDir . '/' . $zipRelPath;
+
         if (file_exists($fullImgPath) && is_file($fullImgPath)) {
-            $imageRelPaths[$cleanRelPath] = $fullImgPath;
+            $imageRelPaths[$zipRelPath] = $fullImgPath;
         }
     }
 
+    // Сохраняем измененные корневые пути в HTML перед архивацией
     if ($docModified) {
-        $doc->saveHtmlFile($doc->uri);
+        $doc->saveHtmlFile($fullPath);
     }
 
     return $imageRelPaths;
@@ -280,8 +308,11 @@ function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $root
 function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, string $url = ''): void {
     if (!file_exists($fullPath)) return;
 
+    // Снимок формируется строго на основе даты последнего изменения файла (filemtime)
     $lastModTime = @filemtime($fullPath) ?: time();
     $dateStr = date('Y-m-d_H-i-s', $lastModTime);
+
+    writeRevisionDebugLog("makeRevision(): HTML '{$fullPath}' имеет filemtime=" . date('Y-m-d H:i:s', $lastModTime) . ". Генерируем имя: '{$dateStr}.zip'");
 
     $revParentDir = $rootDir . '/restricted/revisions/' . $targetRelPath;
     if (!is_dir($revParentDir)) {
@@ -289,24 +320,35 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
     }
 
     $zipPath = $revParentDir . '/' . $dateStr . '.zip';
-    if (file_exists($zipPath)) return;
+
+    // Если архив с такой датой уже существует — пересоздаем его
+    if (file_exists($zipPath)) {
+        writeRevisionDebugLog("makeRevision(): Архив '{$dateStr}.zip' уже существовал. Пересоздание (unlink).");
+        if (!@unlink($zipPath)) {
+            responseError('Не удалось обновить имеющийся архив ревизии: ' . $dateStr . '.zip');
+        }
+    }
 
     $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
-    $imagePaths = getEditableImagesPaths($doc, $url, $rootDir);
+    $imagePaths = getEditableImagesPaths($doc, $url, $rootDir, $fullPath);
 
     $zip = new ZipArchive();
     if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-        return;
+        responseError('Не удалось создать ZIP-архив ревизии');
     }
 
-    $zip->addFile($fullPath, $targetRelPath);
+    // Добавляем HTML-файл по его относительному пути
+    $zip->addFile($fullPath, ltrim($targetRelPath, '/'));
 
+    // Добавляем все локальные картинки
     foreach ($imagePaths as $relPath => $absPath) {
         $zip->addFile($absPath, $relPath);
     }
 
     $zip->close();
+    writeRevisionDebugLog("makeRevision(): Успешно создан архив '{$zipPath}'");
 
+    // Ротация
     $zipFiles = @glob($revParentDir . '/*.zip');
     if (is_array($zipFiles) && count($zipFiles) > 10) {
         sort($zipFiles);
@@ -332,13 +374,24 @@ function getRevisionsList(string $targetRelPath, string $rootDir): array {
     $list = [];
     foreach ($files as $filePath) {
         $filename = basename($filePath);
-        $time = @filemtime($filePath) ?: time();
+        $dateStr = pathinfo($filename, PATHINFO_FILENAME);
+
+        // Истинную дату берем строго из ИМЕНИ файла, а не из файловой системы ОС!
+        $dt = DateTime::createFromFormat('Y-m-d_H-i-s', $dateStr);
+        if ($dt) {
+            $formattedDate = $dt->format('d.m.Y H:i:s');
+        } else {
+            $time = @filemtime($filePath) ?: time();
+            $formattedDate = date('d.m.Y H:i:s', $time);
+        }
 
         $list[] = [
             'filename' => $filename,
-            'date'     => date('d.m.Y H:i:s', $time)
+            'date'     => $formattedDate
         ];
     }
+
+    writeRevisionDebugLog("getRevisionsList(): Сканирование отдало " . count($list) . " ревизий для '{$targetRelPath}'");
     return $list;
 }
 
@@ -413,10 +466,12 @@ switch ($action) {
         $imageIds = json_decode($_POST['image_ids'] ?? '[]', true) ?? [];
 
         try {
+            writeRevisionDebugLog("save_page(): Клиент вызвал сохранение для '{$targetRelPath}'");
+
             // ШАГ 1: Создаем ZIP-ревизию ТЕКУЩЕГО живого состояния (HTML + старые картинки)
             makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
-            // ШАГ 2: Сохраняем текстовые изменения первыми, чтобы они гарантированно сохранились
+            // ШАГ 2: Сохраняем текстовые изменения первыми
             $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
 
             foreach ($changes as $id => $payload) {
@@ -472,7 +527,10 @@ switch ($action) {
 
                         $finalFilename = $candidateName . '.' . $format;
                         $outputFullPath = $uploadsDir . '/' . $finalFilename;
+                        
+                        // Путь относительно корня диск/HTML
                         $outputRelPath = 'uploads/' . $finalFilename;
+                        $htmlSrc = '/' . $outputRelPath; // Обязательный ведущий слэш в HTML
 
                         // Выполняем конвертацию в WebP
                         $converted = convertImageToWebp($tmpFile, $outputFullPath, $origExt, 80, 1920, 1920);
@@ -486,6 +544,7 @@ switch ($action) {
                             $finalFilename = $candidateName . '.' . $origExt;
                             $outputFullPath = $uploadsDir . '/' . $finalFilename;
                             $outputRelPath = 'uploads/' . $finalFilename;
+                            $htmlSrc = '/' . $outputRelPath;
                             @move_uploaded_file($tmpFile, $outputFullPath);
                         }
 
@@ -496,8 +555,8 @@ switch ($action) {
                             $oldLocalPath = resolveLocalImagePath($oldSrc, $url, $rootDir);
 
                             // Записываем новый src
-                            $imgElement->setAttribute('src', $outputRelPath);
-                            writeDebugLog("Успешно обновлен src у элемента '#{$id}' на '{$outputRelPath}'");
+                            $imgElement->setAttribute('src', $htmlSrc);
+                            writeDebugLog("Успешно обновлен src у элемента '#{$id}' на '{$htmlSrc}'");
 
                             // Удаляем старый локальный файл с диска (если он отличается от нового)
                             if ($oldLocalPath && realpath($oldLocalPath) !== realpath($outputFullPath)) {
@@ -549,12 +608,14 @@ switch ($action) {
         }
 
         try {
-            // 1. Создаем бэкап ТЕКУЩЕГО живого состояния перед откатом
+            writeRevisionDebugLog("rollback_revision(): Запрошен откат к файлу '{$revisionFilename}'");
+
+            // 1. Создаем бэкап ТЕКУЩЕГО живого состояния перед откатом (сохранит текущую дату filemtime)
             makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
             // 2. Находим картинки текущей живой версии
             $currentDoc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
-            $currentImages = getEditableImagesPaths($currentDoc, $url, $rootDir);
+            $currentImages = getEditableImagesPaths($currentDoc, $url, $rootDir, $fullPath);
 
             // 3. Безопасно удаляем с диска текущий живой HTML и его живые картинки
             @unlink($fullPath);
@@ -569,12 +630,25 @@ switch ($action) {
             if ($zip->open($revZipPath) === true) {
                 $zip->extractTo($rootDir);
                 $zip->close();
+
+                // 5. Вытягиваем оригинальную дату из имени ZIP и явно возвращаем её распакованному HTML
+                // $dateStr = pathinfo($revisionFilename, PATHINFO_FILENAME);
+                // $dt = DateTime::createFromFormat('Y-m-d_H-i-s', $dateStr);
+                // if ($dt) {
+                //     @touch($fullPath, $dt->getTimestamp());
+                //     writeRevisionDebugLog("rollback_revision(): Выставлен filemtime на " . $dt->format('Y-m-d H:i:s') . " для HTML");
+                // }
+
+                // 6. Удаляем архивированный файл ревизии, так как эта версия стала живым сайтом
+                @unlink($revZipPath);
+                writeRevisionDebugLog("rollback_revision(): Архив ревизии '{$revisionFilename}' успешно удалён.");
+
                 responseSuccess(['message' => 'Откат успешно выполнен']);
             } else {
                 responseError('Не удалось открыть ZIP-архив ревизии');
             }
         } catch (Throwable $e) {
-            writeDebugLog("PHP Exception при откате ревизии: " . $e->getMessage());
+            writeRevisionDebugLog("PHP Exception при откате ревизии: " . $e->getMessage());
             responseError('Ошибка отката: ' . $e->getMessage());
         }
 

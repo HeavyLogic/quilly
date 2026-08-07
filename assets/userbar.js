@@ -66,7 +66,15 @@
             method: 'GET',
             credentials: 'same-origin'
         })
-        .then(r => r.json())
+        .then(async r => {
+            const text = await r.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('CMS Init Auth Error Response:', text);
+                throw new Error('Ошибка авторизации сервера: ' + text.substring(0, 150));
+            }
+        })
         .then(data => {
             if (data && data.success && data.authorized) {
                 renderUserbar(data);
@@ -357,7 +365,10 @@
                     method: 'POST',
                     credentials: 'same-origin'
                 })
-                .then(r => r.json())
+                .then(async r => {
+                    const text = await r.text();
+                    try { return JSON.parse(text); } catch (e) { return {}; }
+                })
                 .then(res => {
                     if (res && res.success) location.reload();
                 });
@@ -383,7 +394,15 @@
                             url: window.location.href
                         })
                     })
-                    .then(r => r.json())
+                    .then(async r => {
+                        const text = await r.text();
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            console.error('CMS Rollback Raw Error:', text);
+                            throw new Error('Cсырой ответ сервера: ' + text.substring(0, 200));
+                        }
+                    })
                     .then(res => {
                         if (res && res.success) {
                             location.reload();
@@ -391,8 +410,8 @@
                             alert('Ошибка отката: ' + (res.message || 'Неизвестная ошибка'));
                         }
                     })
-                    .catch(() => {
-                        alert('Ошибка сети при откате');
+                    .catch((err) => {
+                        alert('Ошибка сети или сервера: ' + err.message);
                     });
                 }
             }
@@ -585,7 +604,15 @@
                 credentials: 'same-origin',
                 body: formData
             })
-            .then(r => r.json())
+            .then(async r => {
+                const text = await r.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('CMS Save Page Raw Response:', text);
+                    throw new Error('Сервер вернул не JSON: ' + text.substring(0, 200));
+                }
+            })
             .then(res => {
                 if (res && res.success) {
                     location.reload();
@@ -596,7 +623,7 @@
                 }
             })
             .catch(err => {
-                alert('Ошибка: ' + err.message);
+                alert('Ошибка сохранения: ' + err.message);
                 btnSave.removeAttribute('disabled');
                 btnSave.innerText = 'Сохранить';
             });
