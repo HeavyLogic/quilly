@@ -1,6 +1,6 @@
 (() => {
     const editedElements = new Set();
-    const stagedImageFiles = new Map(); // Хранилище файлов для будущей загрузки
+    const stagedImageFiles = new Map(); // Хранилище файлов до клика "Сохранить"
     const blacklistedTags = ['VIDEO', 'CANVAS', 'AUDIO', 'INPUT', 'TEXTAREA'];
     let currentActiveElement = null;
 
@@ -84,6 +84,11 @@
         link.href = '/admin/assets/userbar.css';
         document.head.appendChild(link);
 
+        // Формируем блок загрузки картинки (или вывод ошибки, если нет Imagick/GD)
+        const imageGroupHtml = data.img_library_valid
+            ? `<input type="file" id="cms-img-input" class="cms-tb-file" accept="image/*">`
+            : `<span style="color: #ff4d4f; font-size: 11px; font-weight: 600;">Ошибка: Требуется расширение Imagick или GD</span>`;
+
         // 1. Выплывающий тулбар форматирования
         const toolbar = document.createElement('div');
         toolbar.id = 'cms-toolbar';
@@ -126,7 +131,7 @@
 
             <!-- Группа загрузки изображения (IMG) -->
             <div class="cms-tb-group" data-group="image">
-                <input type="file" id="cms-img-input" class="cms-tb-file" accept="image/*">
+                ${imageGroupHtml}
             </div>
         `;
         document.body.appendChild(toolbar);
@@ -148,23 +153,24 @@
             }
         });
 
-        // Обработка выбора нового файла изображения (Мгновенный превью)
+        // Точечный предпросмотр изображения БЕЗ мгновенной отправки на сервер
         const inputImg = toolbar.querySelector('#cms-img-input');
-        inputImg.addEventListener('change', () => {
-            const file = inputImg.files[0];
-            if (file && currentActiveElement && currentActiveElement.tagName === 'IMG') {
-                // Мгновенно подменяем src картинки прямо на странице для предпросмотра
-                const previewUrl = URL.createObjectURL(file);
-                currentActiveElement.src = previewUrl;
+        if (inputImg) {
+            inputImg.addEventListener('change', () => {
+                const file = inputImg.files[0];
+                if (!file || !currentActiveElement || currentActiveElement.tagName !== 'IMG') return;
 
-                // Запоминаем файл и помечаем элемент как изменённый
+                // Локальный мгновенный превью прямо на странице
+                currentActiveElement.src = URL.createObjectURL(file);
+
+                // Сохраняем файл в память для будущей отправки на "Сохранить"
                 currentActiveElement.classList.add('edited');
                 editedElements.add(currentActiveElement.id);
                 stagedImageFiles.set(currentActiveElement.id, file);
 
                 document.getElementById('cms-btn-save').removeAttribute('disabled');
-            }
-        });
+            });
+        }
 
         // Обработка текстовых кнопок
         toolbar.querySelectorAll('.cms-tb-btn[data-cmd]').forEach(btn => {
@@ -543,31 +549,41 @@
             }
         });
 
+        // Нажатие кнопки "Сохранить"
         btnSave.addEventListener('click', () => {
             if (editedElements.size === 0) return;
 
             btnSave.setAttribute('disabled', 'true');
             btnSave.innerText = 'Сохранение...';
 
+            const formData = new FormData();
+            formData.append('filepath', getCustomFilePath());
+            formData.append('url', window.location.href);
+
             const changes = {};
+            const imageIds = [];
+
             editedElements.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
-                    changes[id] = { html: el.innerHTML };
+                    if (el.tagName === 'IMG') {
+                        if (stagedImageFiles.has(id)) {
+                            formData.append('images[' + id + ']', stagedImageFiles.get(id));
+                            imageIds.push(id);
+                        }
+                    } else {
+                        changes[id] = { html: el.innerHTML };
+                    }
                 }
             });
 
-            const payload = {
-                filepath: getCustomFilePath(),
-                url: window.location.href,
-                changes: changes
-            };
+            formData.append('changes', JSON.stringify(changes));
+            formData.append('image_ids', JSON.stringify(imageIds));
 
             fetch('/admin/userapi.php?action=save_page', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify(payload)
+                body: formData
             })
             .then(r => r.json())
             .then(res => {

@@ -1,8 +1,28 @@
 <?php
 header('Content-Type: application/json');
 
+// --- НАСТРОЙКИ И ДЕБАГ ---
+define('CMS_DEBUG', true);
+
 $dbPath = __DIR__ . '/../restricted/users.sqlite';
 $action = $_REQUEST['action'] ?? '';
+
+// Логгер для отладки загрузки и конвертации изображений
+function writeDebugLog(string $message): void {
+    if (!defined('CMS_DEBUG') || !CMS_DEBUG) return;
+
+    $rootDir = realpath(__DIR__ . '/../');
+    $debugDir = $rootDir . '/debug';
+    if (!is_dir($debugDir)) {
+        @mkdir($debugDir, 0755, true);
+    }
+
+    $logFile = $debugDir . '/uploads.txt';
+    $timestamp = date('Y-m-d H:i:s');
+    $formattedMessage = "[{$timestamp}] {$message}\n";
+
+    @file_put_contents($logFile, $formattedMessage, FILE_APPEND);
+}
 
 // --- ХЕЛПЕРЫ ОТВЕТОВ ---
 
@@ -57,6 +77,163 @@ function resolveTargetRelPath(string $customFilePath, string $url, string $rootD
     return $cleanPath;
 }
 
+// Проверка и резолв локального физического пути картинки по её src
+function resolveLocalImagePath(string $src, string $url, string $rootDir): ?string {
+    $src = trim($src);
+    if (!$src) return null;
+
+    $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
+    $siteScheme = parse_url($url, PHP_URL_SCHEME) ?? 'http';
+    $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
+
+    // Если в src зашит абсолютный URL текущего сайта — срезаем домен
+    if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
+        $src = substr($src, strlen($siteBaseUrl));
+    }
+
+    // Если ссылка на сторонний ресурс — игнорируем
+    if (preg_match('#^(https?:)?//#i', $src)) {
+        return null;
+    }
+
+    $cleanRelPath = ltrim($src, '/');
+    $cleanRelPath = parse_url($cleanRelPath, PHP_URL_PATH) ?? $cleanRelPath;
+    $fullPath = $rootDir . '/' . $cleanRelPath;
+
+    if (file_exists($fullPath) && is_file($fullPath)) {
+        return $fullPath;
+    }
+
+    return null;
+}
+
+// Конвертация картинок (png, jpg, jpeg) в WebP через Imagick или GD с полным логированием
+function convertImageToWebp(string $filePath, string $outputWebpPath, string $origExt = '', int $quality = 80, int $maxWidth = 1920, int $maxHeight = 1920): bool {
+    @ini_set('memory_limit', '512M');
+
+    $ext = strtolower($origExt);
+    if (!$ext || $ext === 'tmp') {
+        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    }
+
+    if (!$ext || $ext === 'tmp') {
+        $imgInfo = @getimagesize($filePath);
+        if ($imgInfo && isset($imgInfo['mime'])) {
+            $mimeMap = [
+                'image/jpeg' => 'jpg',
+                'image/jpg'  => 'jpg',
+                'image/png'  => 'png',
+                'image/webp' => 'webp'
+            ];
+            $ext = $mimeMap[$imgInfo['mime']] ?? '';
+        }
+    }
+
+    $origSize = file_exists($filePath) ? filesize($filePath) : 0;
+    writeDebugLog("Старт конвертации: '{$filePath}' (определён формат: {$ext}, размер: {$origSize} байт) -> '{$outputWebpPath}'");
+
+    $converted = false;
+
+    if (extension_loaded('imagick')) {
+        writeDebugLog("Попытка обработки через расширение Imagick");
+        try {
+            $image = new Imagick($filePath);
+            $origWidth = $image->getImageWidth();
+            $origHeight = $image->getImageHeight();
+
+            if ($origWidth > $maxWidth || $origHeight > $maxHeight) {
+                $ratio = min($maxWidth / $origWidth, $maxHeight / $origHeight);
+                $newWidth = (int)($origWidth * $ratio);
+                $newHeight = (int)($origHeight * $ratio);
+                $image->resizeImage($newWidth, $newHeight, Imagick::FILTER_LANCZOS, 1);
+                writeDebugLog("Imagick ресайз с {$origWidth}x{$origHeight} до {$newWidth}x{$newHeight}");
+            }
+
+            $image->setImageFormat('webp');
+            $image->setImageCompressionQuality($quality);
+            $converted = $image->writeImage($outputWebpPath);
+            $image->destroy();
+
+            writeDebugLog("Результат записи Imagick writeImage: " . ($converted ? "УСПЕШНО" : "ОШИБКА"));
+        } catch (Throwable $e) {
+            writeDebugLog("Imagick Exception: " . $e->getMessage());
+            $converted = false;
+        }
+    } elseif (extension_loaded('gd')) {
+        writeDebugLog("Попытка обработки через расширение GD");
+
+        if (!function_exists('imagewebp')) {
+            writeDebugLog("Ошибка GD: функция imagewebp() отсутствует в текущей сборке PHP GD");
+            return false;
+        }
+
+        $image = null;
+        if ($ext === 'jpg' || $ext === 'jpeg') {
+            $image = @imagecreatefromjpeg($filePath);
+        } elseif ($ext === 'png') {
+            $image = @imagecreatefrompng($filePath);
+            if ($image && function_exists('imagepalettetotruecolor') && !imageistruecolor($image)) {
+                imagepalettetotruecolor($image);
+            }
+        } elseif ($ext === 'webp' && function_exists('imagecreatefromwebp')) {
+            $image = @imagecreatefromwebp($filePath);
+        }
+
+        if (!$image) {
+            writeDebugLog("Ошибка GD: Не удалось создать ресурс изображения из файла '{$filePath}' (формат: {$ext})");
+            return false;
+        }
+
+        $origWidth = imagesx($image);
+        $origHeight = imagesy($image);
+
+        if ($origWidth > $maxWidth || $origHeight > $maxHeight) {
+            $ratio = min($maxWidth / $origWidth, $maxHeight / $origHeight);
+            $newWidth = (int)($origWidth * $ratio);
+            $newHeight = (int)($origHeight * $ratio);
+
+            $resizedImage = imagecreatetruecolor($newWidth, $newHeight);
+            if ($ext === 'png' || $ext === 'webp') {
+                imagealphablending($resizedImage, false);
+                imagesavealpha($resizedImage, true);
+            }
+            imagecopyresampled($resizedImage, $image, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
+            imagedestroy($image);
+            $image = $resizedImage;
+            writeDebugLog("GD ресайз с {$origWidth}x{$origHeight} до {$newWidth}x{$newHeight}");
+        }
+
+        $converted = @imagewebp($image, $outputWebpPath, $quality);
+        imagedestroy($image);
+        writeDebugLog("Результат записи GD imagewebp: " . ($converted ? "УСПЕШНО" : "ОШИБКА"));
+    } else {
+        writeDebugLog("Ошибка: Ни Imagick, ни GD расширения не загружены на сервере");
+        return false;
+    }
+
+    if ($converted && file_exists($outputWebpPath)) {
+        $webpSize = filesize($outputWebpPath);
+
+        if ($webpSize === 0) {
+            writeDebugLog("Ошибка: Созданный файл WebP имеет размер 0 байт. Удаление файла.");
+            @unlink($outputWebpPath);
+            return false;
+        }
+
+        if ($webpSize > $origSize) {
+            writeDebugLog("Условие keep_if_larger: Сконвертированный WebP ({$webpSize} байт) ВЕСИТ БОЛЬШЕ оригинала ({$origSize} байт). Отмена конвертации, возвращаем оригинал.");
+            @unlink($outputWebpPath);
+            return false;
+        }
+
+        writeDebugLog("Конвертация успешно завершена! Файл saved: '{$outputWebpPath}' (WebP: {$webpSize} байт vs Оригинал: {$origSize} байт)");
+        return true;
+    }
+
+    writeDebugLog("Ошибка: Файл WebP '{$outputWebpPath}' не существует на диске после конвертации");
+    return false;
+}
+
 // Поиск и нормализация путей всех img.editable
 function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $rootDir): array {
     $imageRelPaths = [];
@@ -72,7 +249,6 @@ function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $root
         $src = trim($img->getAttribute('src') ?? '');
         if (!$src) continue;
 
-        // Если в src зашит абсолютный URL текущего сайта — убираем домен, делаем относительным
         if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
             $src = substr($src, strlen($siteBaseUrl));
             $src = ltrim($src, '/');
@@ -80,13 +256,11 @@ function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $root
             $docModified = true;
         }
 
-        // Пропускаем внешние абсолютные ссылки (http://, https://, //)
         if (preg_match('#^(https?:)?//#i', $src)) {
             continue;
         }
 
         $cleanRelPath = ltrim($src, '/');
-        // Очищаем от возможных GET-параметров (?v=123)
         $cleanRelPath = parse_url($cleanRelPath, PHP_URL_PATH) ?? $cleanRelPath;
 
         $fullImgPath = $rootDir . '/' . $cleanRelPath;
@@ -95,7 +269,6 @@ function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $root
         }
     }
 
-    // Если пришлось исправить абсолютные ссылки на относительные — сохраняем HTML
     if ($docModified) {
         $doc->saveHtmlFile($doc->uri);
     }
@@ -118,7 +291,6 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
     $zipPath = $revParentDir . '/' . $dateStr . '.zip';
     if (file_exists($zipPath)) return;
 
-    // Парсим HTML и собираем пути к редактируемым картинкам
     $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
     $imagePaths = getEditableImagesPaths($doc, $url, $rootDir);
 
@@ -127,17 +299,14 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
         return;
     }
 
-    // 1. Пакуем сам HTML-файл
     $zip->addFile($fullPath, $targetRelPath);
 
-    // 2. Пакуем все существующие img.editable с сохранением относительных путей
     foreach ($imagePaths as $relPath => $absPath) {
         $zip->addFile($absPath, $relPath);
     }
 
     $zip->close();
 
-    // Ротация бэкапов (не более 10 zip-архивов)
     $zipFiles = @glob($revParentDir . '/*.zip');
     if (is_array($zipFiles) && count($zipFiles) > 10) {
         sort($zipFiles);
@@ -158,7 +327,6 @@ function getRevisionsList(string $targetRelPath, string $rootDir): array {
     $files = @glob($parentDir . '/*.zip');
     if (!$files) return [];
 
-    // Сортируем от новых к старым
     rsort($files);
 
     $list = [];
@@ -178,13 +346,14 @@ function getRevisionsList(string $targetRelPath, string $rootDir): array {
 
 switch ($action) {
 
-    // 1. Инициализация бара + получение списка ревизий
+    // 1. Инициализация бара + проверка графических библиотек (Imagick/GD)
     case 'init_bar':
     case 'check_auth':
         $user = getAuthUser($dbPath);
         if ($user) {
             $currentVersion = phpversion();
             $phpValid = version_compare($currentVersion, '8.4.0', '>=');
+            $imgLibraryValid = extension_loaded('imagick') || extension_loaded('gd');
             
             $rootDir = realpath(__DIR__ . '/../');
             $customFilePath = trim($_REQUEST['filepath'] ?? '');
@@ -194,11 +363,12 @@ switch ($action) {
             $revisions = getRevisionsList($targetRelPath, $rootDir);
 
             responseSuccess([
-                'authorized'  => true,
-                'user'        => $user['user'],
-                'php_valid'   => $phpValid,
-                'php_version' => $currentVersion,
-                'revisions'   => $revisions
+                'authorized'        => true,
+                'user'              => $user['user'],
+                'php_valid'         => $phpValid,
+                'php_version'       => $currentVersion,
+                'img_library_valid' => $imgLibraryValid,
+                'revisions'         => $revisions
             ]);
         } else {
             responseSuccess(['authorized' => false]);
@@ -214,7 +384,7 @@ switch ($action) {
         ]);
         responseSuccess();
 
-    // 3. Сохранение изменений в HTML
+    // 3. Сохранение изменений в HTML (текст + отложенная загрузка изображений)
     case 'save_page':
         $user = getAuthUser($dbPath);
         if (!$user) responseError('Доступ запрещен');
@@ -223,14 +393,9 @@ switch ($action) {
             responseError('Требуется PHP 8.4+');
         }
 
-        $rawInput = file_get_contents('php://input');
-        $data = json_decode($rawInput, true);
-
-        if (!$data) responseError('Неверный формат JSON');
-
         $rootDir = realpath(__DIR__ . '/../');
-        $customFilePath = trim($data['filepath'] ?? '');
-        $url = $data['url'] ?? '';
+        $customFilePath = trim($_POST['filepath'] ?? '');
+        $url = $_POST['url'] ?? '';
 
         $targetRelPath = resolveTargetRelPath($customFilePath, $url, $rootDir);
         $fullPath = $rootDir . '/' . $targetRelPath;
@@ -244,48 +409,118 @@ switch ($action) {
             responseError('Файл не найден: ' . $targetRelPath);
         }
 
-        $changes = $data['changes'] ?? [];
-        if (empty($changes)) responseSuccess(['message' => 'Нет изменений']);
+        $changes = json_decode($_POST['changes'] ?? '{}', true) ?? [];
+        $imageIds = json_decode($_POST['image_ids'] ?? '[]', true) ?? [];
 
         try {
-            // 1. Создаем ZIP-ревизию (HTML + изображения)
+            // ШАГ 1: Создаем ZIP-ревизию ТЕКУЩЕГО живого состояния (HTML + старые картинки)
             makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
-            // 2. Обновляем HTML-файл
+            // ШАГ 2: Сохраняем текстовые изменения первыми, чтобы они гарантированно сохранились
             $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
 
             foreach ($changes as $id => $payload) {
                 $element = $doc->getElementById($id);
-                if ($element) {
-                    if (isset($payload['html'])) {
-                        // Очищаем старые дочерние элементы
-                        while ($element->firstChild) {
-                            $element->removeChild($element->firstChild);
-                        }
+                if ($element && isset($payload['html'])) {
+                    while ($element->firstChild) {
+                        $element->removeChild($element->firstChild);
+                    }
 
-                        // Парсим новый HTML-фрагмент
-                        $fragDoc = Dom\HTMLDocument::createFromString(
-                            '<!DOCTYPE html><html><body><div id="cms-temp-fragment-wrapper">' . $payload['html'] . '</div></body></html>',
-                            LIBXML_NOERROR
-                        );
+                    $fragDoc = Dom\HTMLDocument::createFromString(
+                        '<!DOCTYPE html><html><body><div id="cms-temp-fragment-wrapper">' . $payload['html'] . '</div></body></html>',
+                        LIBXML_NOERROR
+                    );
 
-                        $wrapper = $fragDoc->getElementById('cms-temp-fragment-wrapper');
-                        if ($wrapper) {
-                            foreach ($wrapper->childNodes as $childNode) {
-                                $importedNode = $doc->importNode($childNode, true);
-                                $element->appendChild($importedNode);
-                            }
+                    $wrapper = $fragDoc->getElementById('cms-temp-fragment-wrapper');
+                    if ($wrapper) {
+                        foreach ($wrapper->childNodes as $childNode) {
+                            $importedNode = $doc->importNode($childNode, true);
+                            $element->appendChild($importedNode);
                         }
-                    } elseif (isset($payload['text'])) {
-                        $element->textContent = $payload['text'];
                     }
                 }
             }
 
+            // Фиксируем текст на диске
             $doc->saveHtmlFile($fullPath);
+
+            // ШАГ 3: Обрабатываем и загружаем изображения в /uploads/
+            if (!empty($imageIds) && !empty($_FILES['images'])) {
+                $uploadsDir = $rootDir . '/uploads';
+                if (!is_dir($uploadsDir)) {
+                    @mkdir($uploadsDir, 0755, true);
+                }
+
+                $chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+                foreach ($imageIds as $id) {
+                    if (isset($_FILES['images']['tmp_name'][$id]) && is_uploaded_file($_FILES['images']['tmp_name'][$id])) {
+                        $tmpFile = $_FILES['images']['tmp_name'][$id];
+                        $origFullName = $_FILES['images']['name'][$id];
+                        $origName = pathinfo($origFullName, PATHINFO_FILENAME);
+                        $origExt = strtolower(pathinfo($origFullName, PATHINFO_EXTENSION));
+                        $cleanFilename = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $origName) ?: 'img';
+
+                        writeDebugLog("Обработка загруженного файла для ID '{$id}' (исходное имя: '{$origFullName}')");
+
+                        // Цикл пока: гарантируем 100% уникальность имени файла в /uploads/
+                        $format = 'webp';
+                        $candidateName = $cleanFilename;
+                        while (file_exists($uploadsDir . '/' . $candidateName . '.' . $format)) {
+                            $candidateName .= $chars[rand(0, strlen($chars) - 1)];
+                        }
+
+                        $finalFilename = $candidateName . '.' . $format;
+                        $outputFullPath = $uploadsDir . '/' . $finalFilename;
+                        $outputRelPath = 'uploads/' . $finalFilename;
+
+                        // Выполняем конвертацию в WebP
+                        $converted = convertImageToWebp($tmpFile, $outputFullPath, $origExt, 80, 1920, 1920);
+
+                        if (!$converted) {
+                            writeDebugLog("Конвертация в WebP не удалась или отменена (keep_if_larger). Сохраняем оригинал.");
+                            $candidateName = $cleanFilename;
+                            while (file_exists($uploadsDir . '/' . $candidateName . '.' . $origExt)) {
+                                $candidateName .= $chars[rand(0, strlen($chars) - 1)];
+                            }
+                            $finalFilename = $candidateName . '.' . $origExt;
+                            $outputFullPath = $uploadsDir . '/' . $finalFilename;
+                            $outputRelPath = 'uploads/' . $finalFilename;
+                            @move_uploaded_file($tmpFile, $outputFullPath);
+                        }
+
+                        // Обновляем атрибут src у img элемента в DOM и подчищаем старую локальную картинку
+                        $imgElement = $doc->getElementById($id);
+                        if ($imgElement) {
+                            $oldSrc = trim($imgElement->getAttribute('src') ?? '');
+                            $oldLocalPath = resolveLocalImagePath($oldSrc, $url, $rootDir);
+
+                            // Записываем новый src
+                            $imgElement->setAttribute('src', $outputRelPath);
+                            writeDebugLog("Успешно обновлен src у элемента '#{$id}' на '{$outputRelPath}'");
+
+                            // Удаляем старый локальный файл с диска (если он отличается от нового)
+                            if ($oldLocalPath && realpath($oldLocalPath) !== realpath($outputFullPath)) {
+                                if (@unlink($oldLocalPath)) {
+                                    writeDebugLog("Удалена заменённая старая локальная картинка: '{$oldLocalPath}'");
+                                } else {
+                                    writeDebugLog("Ошибка при удалении старой картинки: '{$oldLocalPath}'");
+                                }
+                            }
+                        } else {
+                            writeDebugLog("Ошибка: Элемент с ID '#{$id}' не найден в DOM при обновлении src");
+                        }
+                    }
+                }
+
+                // ШАГ 4: Повторно сохраняем HTML-файл с обновленными src у картинок
+                $doc->saveHtmlFile($fullPath);
+            }
+
             responseSuccess(['saved_file' => $targetRelPath]);
 
         } catch (Throwable $e) {
+            writeDebugLog("PHP Exception при сохранении save_page: " . $e->getMessage());
             responseError('Ошибка сохранения PHP: ' . $e->getMessage());
         }
 
@@ -339,6 +574,7 @@ switch ($action) {
                 responseError('Не удалось открыть ZIP-архив ревизии');
             }
         } catch (Throwable $e) {
+            writeDebugLog("PHP Exception при откате ревизии: " . $e->getMessage());
             responseError('Ошибка отката: ' . $e->getMessage());
         }
 
