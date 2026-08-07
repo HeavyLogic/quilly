@@ -327,28 +327,22 @@
         initRollbackEvents();
     };
 
-    // Проверка активности тегов под кареткой
+    // Проверка активности тегов под кареткой (проверка физических DOM-тегов)
     const updateToolbarButtonStates = () => {
         const toolbar = document.getElementById('cms-toolbar');
         if (!toolbar || !toolbar.classList.contains('active')) return;
 
-        const nativeCommands = {
-            'bold': 'bold',
-            'italic': 'italic',
-            'underline': 'underline',
-            'strikeThrough': 'strikeThrough'
-        };
-
         toolbar.querySelectorAll('.cms-tb-btn[data-cmd]').forEach(btn => {
             const cmd = btn.getAttribute('data-cmd');
 
-            if (nativeCommands[cmd]) {
-                try {
-                    const isActive = document.queryCommandState(nativeCommands[cmd]);
-                    btn.classList.toggle('is-active', isActive);
-                } catch (e) {
-                    btn.classList.remove('is-active');
-                }
+            if (cmd === 'bold') {
+                btn.classList.toggle('is-active', !!(getAncestorTag('b') || getAncestorTag('strong')));
+            } else if (cmd === 'italic') {
+                btn.classList.toggle('is-active', !!(getAncestorTag('i') || getAncestorTag('em')));
+            } else if (cmd === 'underline') {
+                btn.classList.toggle('is-active', !!getAncestorTag('u'));
+            } else if (cmd === 'strikeThrough') {
+                btn.classList.toggle('is-active', !!(getAncestorTag('s') || getAncestorTag('strike')));
             } else if (cmd === 'createLink') {
                 btn.classList.toggle('is-active', !!getAncestorTag('a'));
             } else if (cmd === 'span') {
@@ -448,7 +442,6 @@
             toolbar.setAttribute('data-mode', 'image');
             const inputImg = toolbar.querySelector('#cms-img-input');
             if (inputImg) {
-                // Восстанавливаем имя файла в инпуте с помощью DataTransfer, если для этой картинки уже выбран файл
                 if (stagedImageFiles.has(target.id)) {
                     const stagedFile = stagedImageFiles.get(target.id);
                     const dt = new DataTransfer();
@@ -539,15 +532,21 @@
             }
         });
 
-        // Главный обработчик кликов для выбора элементов (включая элементы с наложением)
+        // Главный обработчик кликов для выбора элементов
         document.addEventListener('click', (e) => {
             if (!document.body.classList.contains('cms-edit-mode')) return;
 
             // Если кликнули по интерфейсу CMS — ничего не делаем
             if (e.target.closest('#cms-toolbar, #cms-userbar, #cms-revisions, #cms-img-modal, #cms-progress-bar')) return;
 
-            // Закрываем модальное окно выбора картинок при клике в любое другое место
+            // Закрываем модальное окно выбора картинок при клике в другое место
             if (imgModal) imgModal.classList.remove('active');
+
+            // Страховка от закрытия тулбара при протяжке выделения мышкой за границы элемента
+            const sel = window.getSelection();
+            if (sel && !sel.isCollapsed && currentActiveElement && currentActiveElement.contains(sel.anchorNode)) {
+                return;
+            }
 
             // 1. Проверяем слои в точке клика на наличие нескольких IMG.editable
             const hitElements = document.elementsFromPoint(e.clientX, e.clientY);

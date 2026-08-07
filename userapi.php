@@ -1,18 +1,17 @@
 <?php
 header('Content-Type: application/json');
 
-// --- НАСТРОЙКИ И ДЕБАГ ---
-define('CMS_DEBUG', true);
+// Точка входа в CMS и подключение конфигурации
+define('CMS_EXEC', true);
+require_once __DIR__ . '/config.php';
 
-$dbPath = __DIR__ . '/../restricted/users.sqlite';
 $action = $_REQUEST['action'] ?? '';
 
 // Логгер для отладки загрузки и конвертации изображений
 function writeDebugLog(string $message): void {
-    if (!defined('CMS_DEBUG') || !CMS_DEBUG) return;
+    if (!defined('CMS_CONFIG') || !CMS_CONFIG['debug']) return;
 
-    $rootDir = realpath(__DIR__ . '/../');
-    $debugDir = $rootDir . '/debug';
+    $debugDir = CMS_CONFIG['debug_dir'];
     if (!is_dir($debugDir)) {
         @mkdir($debugDir, 0755, true);
     }
@@ -26,10 +25,9 @@ function writeDebugLog(string $message): void {
 
 // Логгер для отладки создания и отката ревизий
 function writeRevisionDebugLog(string $message): void {
-    if (!defined('CMS_DEBUG') || !CMS_DEBUG) return;
+    if (!defined('CMS_CONFIG') || !CMS_CONFIG['debug']) return;
 
-    $rootDir = realpath(__DIR__ . '/../');
-    $debugDir = $rootDir . '/debug';
+    $debugDir = CMS_CONFIG['debug_dir'];
     if (!is_dir($debugDir)) {
         @mkdir($debugDir, 0755, true);
     }
@@ -124,8 +122,12 @@ function resolveLocalImagePath(string $src, string $url, string $rootDir): ?stri
 }
 
 // Конвертация картинок (png, jpg, jpeg) в WebP через Imagick или GD с полным логированием
-function convertImageToWebp(string $filePath, string $outputWebpPath, string $origExt = '', int $quality = 80, int $maxWidth = 1920, int $maxHeight = 1920): bool {
+function convertImageToWebp(string $filePath, string $outputWebpPath, string $origExt = '', ?int $quality = null, ?int $maxWidth = null, ?int $maxHeight = null): bool {
     @ini_set('memory_limit', '512M');
+
+    $quality = $quality ?? CMS_CONFIG['images']['quality'] ?? 80;
+    $maxWidth = $maxWidth ?? CMS_CONFIG['images']['max_width'] ?? 1920;
+    $maxHeight = $maxHeight ?? CMS_CONFIG['images']['max_height'] ?? 1920;
 
     $ext = strtolower($origExt);
     if (!$ext || $ext === 'tmp') {
@@ -312,7 +314,7 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
     $lastModTime = @filemtime($fullPath) ?: time();
     $dateStr = date('Y-m-d_H-i-s', $lastModTime);
 
-    $revParentDir = $rootDir . '/restricted/revisions/' . $targetRelPath;
+    $revParentDir = CMS_CONFIG['revisions_dir'] . '/' . $targetRelPath;
     if (!is_dir($revParentDir)) {
         @mkdir($revParentDir, 0755, true);
     }
@@ -334,7 +336,7 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
         responseError('Не удалось создать ZIP-архив ревизии');
     }
 
-    // Добавляем HTML-файл по его относительному пути (без слэша вначале)
+    // Добавляем HTML-файл по его относительному пути
     $zip->addFile($fullPath, ltrim($targetRelPath, '/'));
 
     // Добавляем все локальные картинки
@@ -358,7 +360,7 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
 
 // Сканирование списка ZIP-ревизий
 function getRevisionsList(string $targetRelPath, string $rootDir): array {
-    $parentDir = $rootDir . '/restricted/revisions/' . $targetRelPath;
+    $parentDir = CMS_CONFIG['revisions_dir'] . '/' . $targetRelPath;
     if (!is_dir($parentDir)) return [];
 
     $files = @glob($parentDir . '/*.zip');
@@ -395,7 +397,7 @@ switch ($action) {
     // 1. Инициализация бара + проверка графических библиотек (Imagick/GD)
     case 'init_bar':
     case 'check_auth':
-        $user = getAuthUser($dbPath);
+        $user = getAuthUser(CMS_CONFIG['db_path']);
         if ($user) {
             $currentVersion = phpversion();
             $phpValid = version_compare($currentVersion, '8.4.0', '>=');
@@ -432,7 +434,7 @@ switch ($action) {
 
     // 3. Загрузка ровно ОДНОГО изображения (Поочередная загрузка)
     case 'upload_single_image':
-        $user = getAuthUser($dbPath);
+        $user = getAuthUser(CMS_CONFIG['db_path']);
         if (!$user) responseError('Доступ запрещен');
 
         if (!extension_loaded('imagick') && !extension_loaded('gd')) {
@@ -461,7 +463,8 @@ switch ($action) {
             // Создаем ZIP-ревизию (если еще не создана для текущего состояния)
             makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
-            $uploadsDir = $rootDir . '/uploads';
+            $uploadSubDir = CMS_CONFIG['images']['upload_dir'];
+            $uploadsDir = $rootDir . '/' . $uploadSubDir;
             if (!is_dir($uploadsDir)) {
                 @mkdir($uploadsDir, 0755, true);
             }
@@ -483,10 +486,10 @@ switch ($action) {
 
             $finalFilename = $candidateName . '.' . $format;
             $outputFullPath = $uploadsDir . '/' . $finalFilename;
-            $outputRelPath = 'uploads/' . $finalFilename;
+            $outputRelPath = $uploadSubDir . '/' . $finalFilename;
             $htmlSrc = '/' . $outputRelPath;
 
-            $converted = convertImageToWebp($tmpFile, $outputFullPath, $origExt, 80, 1920, 1920);
+            $converted = convertImageToWebp($tmpFile, $outputFullPath, $origExt);
 
             if (!$converted) {
                 $candidateName = $cleanFilename;
@@ -495,7 +498,7 @@ switch ($action) {
                 }
                 $finalFilename = $candidateName . '.' . $origExt;
                 $outputFullPath = $uploadsDir . '/' . $finalFilename;
-                $outputRelPath = 'uploads/' . $finalFilename;
+                $outputRelPath = $uploadSubDir . '/' . $finalFilename;
                 $htmlSrc = '/' . $outputRelPath;
                 @move_uploaded_file($tmpFile, $outputFullPath);
             }
@@ -530,7 +533,7 @@ switch ($action) {
 
     // 4. Сохранение текстовых изменений в HTML
     case 'save_page':
-        $user = getAuthUser($dbPath);
+        $user = getAuthUser(CMS_CONFIG['db_path']);
         if (!$user) responseError('Доступ запрещен');
 
         if (version_compare(phpversion(), '8.4.0', '<')) {
@@ -597,7 +600,7 @@ switch ($action) {
 
     // 5. Откат к выбранной ZIP-ревизии
     case 'rollback_revision':
-        $user = getAuthUser($dbPath);
+        $user = getAuthUser(CMS_CONFIG['db_path']);
         if (!$user) responseError('Доступ запрещен');
 
         $rawInput = file_get_contents('php://input');
@@ -613,14 +616,14 @@ switch ($action) {
         $targetRelPath = resolveTargetRelPath($customFilePath, $url, $rootDir);
         $fullPath = $rootDir . '/' . $targetRelPath;
 
-        $revZipPath = $rootDir . '/restricted/revisions/' . $targetRelPath . '/' . $revisionFilename;
+        $revZipPath = CMS_CONFIG['revisions_dir'] . '/' . $targetRelPath . '/' . $revisionFilename;
 
         if (!file_exists($revZipPath)) {
             responseError('Файл ревизии не найден: ' . $revisionFilename);
         }
 
         try {
-            // 1. Создаем бэкап ТЕКУЩЕГО живого состояния перед откатом (сохранит текущую дату filemtime)
+            // 1. Создаем бэкап ТЕКУЩЕГО живого состояния перед откатом
             makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
             // 2. Находим картинки текущей живой версии
@@ -646,12 +649,10 @@ switch ($action) {
                 $dt = DateTime::createFromFormat('Y-m-d_H-i-s', $dateStr);
                 if ($dt) {
                     @touch($fullPath, $dt->getTimestamp());
-                    writeRevisionDebugLog("rollback_revision(): Выставлен filemtime на " . $dt->format('Y-m-d H:i:s') . " для HTML");
                 }
 
                 // 6. Удаляем архивированный файл ревизии, так как эта версия стала живым сайтом
                 @unlink($revZipPath);
-                writeRevisionDebugLog("rollback_revision(): Архив ревизии '{$revisionFilename}' успешно удалён.");
 
                 responseSuccess(['message' => 'Откат успешно выполнен']);
             } else {

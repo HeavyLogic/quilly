@@ -1,12 +1,13 @@
 <?php
+define('CMS_EXEC', true);
+require_once __DIR__ . '/config.php';
+
 session_start();
 
-$dbPath = __DIR__ . '/../restricted/users.sqlite';
-
 // 1. Если кука уже есть и валидна — сразу редиректим на сайт
-if (isset($_COOKIE['site_auth']) && file_exists($dbPath)) {
+if (isset($_COOKIE['site_auth']) && file_exists(CMS_CONFIG['db_path'])) {
     try {
-        $db = new PDO("sqlite:" . $dbPath);
+        $db = new PDO("sqlite:" . CMS_CONFIG['db_path']);
         $stmt = $db->prepare("SELECT id FROM users WHERE auth = ? AND auth != ''");
         $stmt->execute([$_COOKIE['site_auth']]);
         if ($stmt->fetch()) {
@@ -31,13 +32,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
 
-        if (!file_exists($dbPath)) {
+        if (!file_exists(CMS_CONFIG['db_path'])) {
             echo json_encode(['success' => false, 'message' => 'База данных не найдена. Создайте пользователей через superuser.php']);
             exit;
         }
 
         try {
-            $db = new PDO("sqlite:" . $dbPath);
+            $db = new PDO("sqlite:" . CMS_CONFIG['db_path']);
             $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
             $stmt = $db->prepare("SELECT * FROM users WHERE user = ?");
@@ -158,8 +159,6 @@ $(document).ready(function() {
     });
 });
 </script>
-
-<script src="admin/"></script>
 
 </body>
 </html>
