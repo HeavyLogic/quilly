@@ -50,7 +50,7 @@
         if (!document.body.classList.contains('cms-edit-mode')) return;
 
         // Разрешаем клики внутри элементов интерфейса CMS
-        if (e.target.closest('#cms-userbar, #cms-revisions, #cms-toolbar, #cms-img-modal')) return;
+        if (e.target.closest('#cms-userbar, #cms-revisions, #cms-toolbar, #cms-img-modal, #cms-progress-bar')) return;
 
         // Перехватываем ссылки, кнопки и сабмиты страниц
         const clickable = e.target.closest('a, button, input[type="submit"], input[type="button"]');
@@ -153,6 +153,18 @@
             <div class="cms-img-modal-list"></div>
         `;
         document.body.appendChild(imgModal);
+
+        // 1.2 Выплывающий блок прогресса поочередной загрузки
+        const progressBar = document.createElement('div');
+        progressBar.id = 'cms-progress-bar';
+        progressBar.className = 'cms-glass-card';
+        progressBar.innerHTML = `
+            <span class="cms-progress-label" id="cms-progress-label">Загрузка изображений (0/0)</span>
+            <div class="cms-progress-track">
+                <div class="cms-progress-fill" id="cms-progress-fill"></div>
+            </div>
+        `;
+        document.body.appendChild(progressBar);
 
         // Предотвращаем потерю фокуса при клике по кнопкам тулбара (кроме инпутов)
         toolbar.addEventListener('mousedown', (e) => {
@@ -434,6 +446,18 @@
 
         if (tagName === 'IMG') {
             toolbar.setAttribute('data-mode', 'image');
+            const inputImg = toolbar.querySelector('#cms-img-input');
+            if (inputImg) {
+                // Восстанавливаем имя файла в инпуте с помощью DataTransfer, если для этой картинки уже выбран файл
+                if (stagedImageFiles.has(target.id)) {
+                    const stagedFile = stagedImageFiles.get(target.id);
+                    const dt = new DataTransfer();
+                    dt.items.add(stagedFile);
+                    inputImg.files = dt.files;
+                } else {
+                    inputImg.value = '';
+                }
+            }
         } else if (tagName === 'A') {
             toolbar.setAttribute('data-mode', 'link');
             const inputLink = toolbar.querySelector('#cms-link-input');
@@ -480,6 +504,9 @@
         const btnSave = document.getElementById('cms-btn-save');
         const toolbar = document.getElementById('cms-toolbar');
         const imgModal = document.getElementById('cms-img-modal');
+        const progressBar = document.getElementById('cms-progress-bar');
+        const progressLabel = document.getElementById('cms-progress-label');
+        const progressFill = document.getElementById('cms-progress-fill');
 
         toggle.addEventListener('change', function() {
             const isEdit = this.checked;
@@ -490,6 +517,7 @@
                 document.body.classList.remove('cms-edit-mode');
                 toolbar.classList.remove('active');
                 if (imgModal) imgModal.classList.remove('active');
+                if (progressBar) progressBar.classList.remove('active');
                 setActiveElement(null);
                 cleanupEmptyBr();
             }
@@ -516,7 +544,7 @@
             if (!document.body.classList.contains('cms-edit-mode')) return;
 
             // Если кликнули по интерфейсу CMS — ничего не делаем
-            if (e.target.closest('#cms-toolbar, #cms-userbar, #cms-revisions, #cms-img-modal')) return;
+            if (e.target.closest('#cms-toolbar, #cms-userbar, #cms-revisions, #cms-img-modal, #cms-progress-bar')) return;
 
             // Закрываем модальное окно выбора картинок при клике в любое другое место
             if (imgModal) imgModal.classList.remove('active');
@@ -568,27 +596,25 @@
             }
         });
 
-        // Нажатие кнопки "Сохранить"
-        btnSave.addEventListener('click', () => {
+        // Нажатие кнопки "Сохранить" (Двухэтапное сохранение + Поочередная загрузка)
+        btnSave.addEventListener('click', async () => {
             if (editedElements.size === 0) return;
 
             btnSave.setAttribute('disabled', 'true');
             btnSave.innerText = 'Сохранение...';
 
-            const formData = new FormData();
-            formData.append('filepath', getCustomFilePath());
-            formData.append('url', window.location.href);
+            // Скрываем обычный тулбар
+            toolbar.classList.remove('active');
 
             const changes = {};
-            const imageIds = [];
+            const imageTasks = [];
 
             editedElements.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     if (el.tagName === 'IMG') {
                         if (stagedImageFiles.has(id)) {
-                            formData.append('images[' + id + ']', stagedImageFiles.get(id));
-                            imageIds.push(id);
+                            imageTasks.push({ id: id, file: stagedImageFiles.get(id) });
                         }
                     } else {
                         changes[id] = { html: el.innerHTML };
@@ -596,37 +622,90 @@
                 }
             });
 
-            formData.append('changes', JSON.stringify(changes));
-            formData.append('image_ids', JSON.stringify(imageIds));
+            // ШАГ 1: Первичное сохранение текстовых изменений (если они есть)
+            if (Object.keys(changes).length > 0) {
+                btnSave.innerText = 'Сохранение текста...';
+                const formData = new FormData();
+                formData.append('filepath', getCustomFilePath());
+                formData.append('url', window.location.href);
+                formData.append('changes', JSON.stringify(changes));
 
-            fetch('/admin/userapi.php?action=save_page', {
-                method: 'POST',
-                credentials: 'same-origin',
-                body: formData
-            })
-            .then(async r => {
-                const text = await r.text();
                 try {
-                    return JSON.parse(text);
-                } catch (e) {
-                    console.error('CMS Save Page Raw Response:', text);
-                    throw new Error('Сервер вернул не JSON: ' + text.substring(0, 200));
-                }
-            })
-            .then(res => {
-                if (res && res.success) {
-                    location.reload();
-                } else {
-                    alert('Ошибка: ' + (res.message || 'Неизвестная ошибка'));
+                    const r = await fetch('/admin/userapi.php?action=save_page', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        body: formData
+                    });
+                    const text = await r.text();
+                    const res = JSON.parse(text);
+                    if (!res || !res.success) {
+                        throw new Error(res.message || 'Ошибка сохранения текста');
+                    }
+                } catch (err) {
+                    alert('Ошибка при сохранении текста: ' + err.message);
                     btnSave.removeAttribute('disabled');
                     btnSave.innerText = 'Сохранить';
+                    return;
                 }
-            })
-            .catch(err => {
-                alert('Ошибка сохранения: ' + err.message);
-                btnSave.removeAttribute('disabled');
-                btnSave.innerText = 'Сохранить';
-            });
+            }
+
+            // ШАГ 2: Поочередная загрузка изображений по одному файлу
+            if (imageTasks.length > 0) {
+                progressFill.style.width = '0%';
+                progressLabel.innerText = `Загрузка изображений (0/${imageTasks.length})`;
+                progressBar.classList.add('active');
+
+                const total = imageTasks.length;
+
+                for (let i = 0; i < total; i++) {
+                    const task = imageTasks[i];
+                    const imgEl = document.getElementById(task.id);
+                    const currentSrc = imgEl ? (imgEl.getAttribute('src') || '') : '';
+
+                    const formData = new FormData();
+                    formData.append('filepath', getCustomFilePath());
+                    formData.append('url', window.location.href);
+                    formData.append('target_id', task.id);
+                    formData.append('target_src', currentSrc);
+                    formData.append('image', task.file);
+
+                    try {
+                        const r = await fetch('/admin/userapi.php?action=upload_single_image', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            body: formData
+                        });
+                        const text = await r.text();
+                        const res = JSON.parse(text);
+
+                        if (!res || !res.success) {
+                            throw new Error(res.message || `Ошибка загрузки файла ${i + 1}`);
+                        }
+
+                        // Обновляем src картинки в DOM
+                        if (imgEl && res.relative_path) {
+                            imgEl.setAttribute('src', res.relative_path);
+                        }
+
+                        // Обновляем индикатор загрузки
+                        const pct = Math.round(((i + 1) / total) * 100);
+                        progressFill.style.width = pct + '%';
+                        progressLabel.innerText = `Загрузка изображений (${i + 1}/${total})`;
+
+                    } catch (err) {
+                        alert(`Ошибка при загрузке изображения ${i + 1} из ${total}: ` + err.message);
+                        progressBar.classList.remove('active');
+                        btnSave.removeAttribute('disabled');
+                        btnSave.innerText = 'Сохранить';
+                        return;
+                    }
+                }
+
+                progressBar.classList.remove('active');
+            }
+
+            // ШАГ 3: Перезагрузка страницы по завершению всех этапов
+            location.reload();
         });
     };
 })();

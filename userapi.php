@@ -312,8 +312,6 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
     $lastModTime = @filemtime($fullPath) ?: time();
     $dateStr = date('Y-m-d_H-i-s', $lastModTime);
 
-    writeRevisionDebugLog("makeRevision(): HTML '{$fullPath}' имеет filemtime=" . date('Y-m-d H:i:s', $lastModTime) . ". Генерируем имя: '{$dateStr}.zip'");
-
     $revParentDir = $rootDir . '/restricted/revisions/' . $targetRelPath;
     if (!is_dir($revParentDir)) {
         @mkdir($revParentDir, 0755, true);
@@ -323,7 +321,6 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
 
     // Если архив с такой датой уже существует — пересоздаем его
     if (file_exists($zipPath)) {
-        writeRevisionDebugLog("makeRevision(): Архив '{$dateStr}.zip' уже существовал. Пересоздание (unlink).");
         if (!@unlink($zipPath)) {
             responseError('Не удалось обновить имеющийся архив ревизии: ' . $dateStr . '.zip');
         }
@@ -337,7 +334,7 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
         responseError('Не удалось создать ZIP-архив ревизии');
     }
 
-    // Добавляем HTML-файл по его относительному пути
+    // Добавляем HTML-файл по его относительному пути (без слэша вначале)
     $zip->addFile($fullPath, ltrim($targetRelPath, '/'));
 
     // Добавляем все локальные картинки
@@ -346,9 +343,7 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
     }
 
     $zip->close();
-    writeRevisionDebugLog("makeRevision(): Успешно создан архив '{$zipPath}'");
 
-    // Ротация
     $zipFiles = @glob($revParentDir . '/*.zip');
     if (is_array($zipFiles) && count($zipFiles) > 10) {
         sort($zipFiles);
@@ -390,8 +385,6 @@ function getRevisionsList(string $targetRelPath, string $rootDir): array {
             'date'     => $formattedDate
         ];
     }
-
-    writeRevisionDebugLog("getRevisionsList(): Сканирование отдало " . count($list) . " ревизий для '{$targetRelPath}'");
     return $list;
 }
 
@@ -437,7 +430,105 @@ switch ($action) {
         ]);
         responseSuccess();
 
-    // 3. Сохранение изменений в HTML (текст + отложенная загрузка изображений)
+    // 3. Загрузка ровно ОДНОГО изображения (Поочередная загрузка)
+    case 'upload_single_image':
+        $user = getAuthUser($dbPath);
+        if (!$user) responseError('Доступ запрещен');
+
+        if (!extension_loaded('imagick') && !extension_loaded('gd')) {
+            responseError('Сервер не поддерживает Imagick или GD');
+        }
+
+        if (empty($_FILES['image']['tmp_name'])) {
+            responseError('Файл изображения не получен');
+        }
+
+        $rootDir = realpath(__DIR__ . '/../');
+        $customFilePath = trim($_POST['filepath'] ?? '');
+        $url = $_POST['url'] ?? '';
+        $targetId = trim($_POST['target_id'] ?? '');
+
+        if (!$targetId) responseError('Не указан ID элемента изображения');
+
+        $targetRelPath = resolveTargetRelPath($customFilePath, $url, $rootDir);
+        $fullPath = $rootDir . '/' . $targetRelPath;
+
+        if (!file_exists($fullPath)) {
+            responseError('Файл страницы не найден: ' . $targetRelPath);
+        }
+
+        try {
+            // Создаем ZIP-ревизию (если еще не создана для текущего состояния)
+            makeRevision($fullPath, $targetRelPath, $rootDir, $url);
+
+            $uploadsDir = $rootDir . '/uploads';
+            if (!is_dir($uploadsDir)) {
+                @mkdir($uploadsDir, 0755, true);
+            }
+
+            $tmpFile = $_FILES['image']['tmp_name'];
+            $origFullName = $_FILES['image']['name'];
+            $origName = pathinfo($origFullName, PATHINFO_FILENAME);
+            $origExt = strtolower(pathinfo($origFullName, PATHINFO_EXTENSION));
+            $cleanFilename = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $origName) ?: 'img';
+
+            writeDebugLog("upload_single_image: Обработка '{$origFullName}' для элемента '#{$targetId}'");
+
+            $chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            $format = 'webp';
+            $candidateName = $cleanFilename;
+            while (file_exists($uploadsDir . '/' . $candidateName . '.' . $format)) {
+                $candidateName .= $chars[rand(0, strlen($chars) - 1)];
+            }
+
+            $finalFilename = $candidateName . '.' . $format;
+            $outputFullPath = $uploadsDir . '/' . $finalFilename;
+            $outputRelPath = 'uploads/' . $finalFilename;
+            $htmlSrc = '/' . $outputRelPath;
+
+            $converted = convertImageToWebp($tmpFile, $outputFullPath, $origExt, 80, 1920, 1920);
+
+            if (!$converted) {
+                $candidateName = $cleanFilename;
+                while (file_exists($uploadsDir . '/' . $candidateName . '.' . $origExt)) {
+                    $candidateName .= $chars[rand(0, strlen($chars) - 1)];
+                }
+                $finalFilename = $candidateName . '.' . $origExt;
+                $outputFullPath = $uploadsDir . '/' . $finalFilename;
+                $outputRelPath = 'uploads/' . $finalFilename;
+                $htmlSrc = '/' . $outputRelPath;
+                @move_uploaded_file($tmpFile, $outputFullPath);
+            }
+
+            // Обновляем HTML в DOM
+            $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
+            $imgElement = $doc->getElementById($targetId);
+
+            if ($imgElement) {
+                $oldSrc = trim($imgElement->getAttribute('src') ?? '');
+                $oldLocalPath = resolveLocalImagePath($oldSrc, $url, $rootDir);
+
+                $imgElement->setAttribute('src', $htmlSrc);
+
+                // Если старая локальная картинка отличалась — удаляем её
+                if ($oldLocalPath && realpath($oldLocalPath) !== realpath($outputFullPath)) {
+                    if (@unlink($oldLocalPath)) {
+                        writeDebugLog("Удалена старая заменённая картинка: '{$oldLocalPath}'");
+                    }
+                }
+
+                $doc->saveHtmlFile($fullPath);
+                responseSuccess(['relative_path' => $htmlSrc]);
+            } else {
+                responseError('Элемент #' . $targetId . ' не найден в HTML');
+            }
+
+        } catch (Throwable $e) {
+            writeDebugLog("PHP Exception при upload_single_image: " . $e->getMessage());
+            responseError('Ошибка загрузки: ' . $e->getMessage());
+        }
+
+    // 4. Сохранение текстовых изменений в HTML
     case 'save_page':
         $user = getAuthUser($dbPath);
         if (!$user) responseError('Доступ запрещен');
@@ -463,7 +554,6 @@ switch ($action) {
         }
 
         $changes = json_decode($_POST['changes'] ?? '{}', true) ?? [];
-        $imageIds = json_decode($_POST['image_ids'] ?? '[]', true) ?? [];
 
         try {
             writeRevisionDebugLog("save_page(): Клиент вызвал сохранение для '{$targetRelPath}'");
@@ -471,7 +561,7 @@ switch ($action) {
             // ШАГ 1: Создаем ZIP-ревизию ТЕКУЩЕГО живого состояния (HTML + старые картинки)
             makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
-            // ШАГ 2: Сохраняем текстовые изменения первыми
+            // ШАГ 2: Сохраняем текстовые изменения
             $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
 
             foreach ($changes as $id => $payload) {
@@ -498,84 +588,6 @@ switch ($action) {
 
             // Фиксируем текст на диске
             $doc->saveHtmlFile($fullPath);
-
-            // ШАГ 3: Обрабатываем и загружаем изображения в /uploads/
-            if (!empty($imageIds) && !empty($_FILES['images'])) {
-                $uploadsDir = $rootDir . '/uploads';
-                if (!is_dir($uploadsDir)) {
-                    @mkdir($uploadsDir, 0755, true);
-                }
-
-                $chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-
-                foreach ($imageIds as $id) {
-                    if (isset($_FILES['images']['tmp_name'][$id]) && is_uploaded_file($_FILES['images']['tmp_name'][$id])) {
-                        $tmpFile = $_FILES['images']['tmp_name'][$id];
-                        $origFullName = $_FILES['images']['name'][$id];
-                        $origName = pathinfo($origFullName, PATHINFO_FILENAME);
-                        $origExt = strtolower(pathinfo($origFullName, PATHINFO_EXTENSION));
-                        $cleanFilename = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $origName) ?: 'img';
-
-                        writeDebugLog("Обработка загруженного файла для ID '{$id}' (исходное имя: '{$origFullName}')");
-
-                        // Цикл пока: гарантируем 100% уникальность имени файла в /uploads/
-                        $format = 'webp';
-                        $candidateName = $cleanFilename;
-                        while (file_exists($uploadsDir . '/' . $candidateName . '.' . $format)) {
-                            $candidateName .= $chars[rand(0, strlen($chars) - 1)];
-                        }
-
-                        $finalFilename = $candidateName . '.' . $format;
-                        $outputFullPath = $uploadsDir . '/' . $finalFilename;
-                        
-                        // Путь относительно корня диск/HTML
-                        $outputRelPath = 'uploads/' . $finalFilename;
-                        $htmlSrc = '/' . $outputRelPath; // Обязательный ведущий слэш в HTML
-
-                        // Выполняем конвертацию в WebP
-                        $converted = convertImageToWebp($tmpFile, $outputFullPath, $origExt, 80, 1920, 1920);
-
-                        if (!$converted) {
-                            writeDebugLog("Конвертация в WebP не удалась или отменена (keep_if_larger). Сохраняем оригинал.");
-                            $candidateName = $cleanFilename;
-                            while (file_exists($uploadsDir . '/' . $candidateName . '.' . $origExt)) {
-                                $candidateName .= $chars[rand(0, strlen($chars) - 1)];
-                            }
-                            $finalFilename = $candidateName . '.' . $origExt;
-                            $outputFullPath = $uploadsDir . '/' . $finalFilename;
-                            $outputRelPath = 'uploads/' . $finalFilename;
-                            $htmlSrc = '/' . $outputRelPath;
-                            @move_uploaded_file($tmpFile, $outputFullPath);
-                        }
-
-                        // Обновляем атрибут src у img элемента в DOM и подчищаем старую локальную картинку
-                        $imgElement = $doc->getElementById($id);
-                        if ($imgElement) {
-                            $oldSrc = trim($imgElement->getAttribute('src') ?? '');
-                            $oldLocalPath = resolveLocalImagePath($oldSrc, $url, $rootDir);
-
-                            // Записываем новый src
-                            $imgElement->setAttribute('src', $htmlSrc);
-                            writeDebugLog("Успешно обновлен src у элемента '#{$id}' на '{$htmlSrc}'");
-
-                            // Удаляем старый локальный файл с диска (если он отличается от нового)
-                            if ($oldLocalPath && realpath($oldLocalPath) !== realpath($outputFullPath)) {
-                                if (@unlink($oldLocalPath)) {
-                                    writeDebugLog("Удалена заменённая старая локальная картинка: '{$oldLocalPath}'");
-                                } else {
-                                    writeDebugLog("Ошибка при удалении старой картинки: '{$oldLocalPath}'");
-                                }
-                            }
-                        } else {
-                            writeDebugLog("Ошибка: Элемент с ID '#{$id}' не найден в DOM при обновлении src");
-                        }
-                    }
-                }
-
-                // ШАГ 4: Повторно сохраняем HTML-файл с обновленными src у картинок
-                $doc->saveHtmlFile($fullPath);
-            }
-
             responseSuccess(['saved_file' => $targetRelPath]);
 
         } catch (Throwable $e) {
@@ -583,7 +595,7 @@ switch ($action) {
             responseError('Ошибка сохранения PHP: ' . $e->getMessage());
         }
 
-    // 4. Откат к выбранной ZIP-ревизии
+    // 5. Откат к выбранной ZIP-ревизии
     case 'rollback_revision':
         $user = getAuthUser($dbPath);
         if (!$user) responseError('Доступ запрещен');
@@ -608,8 +620,6 @@ switch ($action) {
         }
 
         try {
-            writeRevisionDebugLog("rollback_revision(): Запрошен откат к файлу '{$revisionFilename}'");
-
             // 1. Создаем бэкап ТЕКУЩЕГО живого состояния перед откатом (сохранит текущую дату filemtime)
             makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
@@ -632,12 +642,12 @@ switch ($action) {
                 $zip->close();
 
                 // 5. Вытягиваем оригинальную дату из имени ZIP и явно возвращаем её распакованному HTML
-                // $dateStr = pathinfo($revisionFilename, PATHINFO_FILENAME);
-                // $dt = DateTime::createFromFormat('Y-m-d_H-i-s', $dateStr);
-                // if ($dt) {
-                //     @touch($fullPath, $dt->getTimestamp());
-                //     writeRevisionDebugLog("rollback_revision(): Выставлен filemtime на " . $dt->format('Y-m-d H:i:s') . " для HTML");
-                // }
+                $dateStr = pathinfo($revisionFilename, PATHINFO_FILENAME);
+                $dt = DateTime::createFromFormat('Y-m-d_H-i-s', $dateStr);
+                if ($dt) {
+                    @touch($fullPath, $dt->getTimestamp());
+                    writeRevisionDebugLog("rollback_revision(): Выставлен filemtime на " . $dt->format('Y-m-d H:i:s') . " для HTML");
+                }
 
                 // 6. Удаляем архивированный файл ревизии, так как эта версия стала живым сайтом
                 @unlink($revZipPath);
