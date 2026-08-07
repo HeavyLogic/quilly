@@ -85,7 +85,7 @@
         if (!document.body.classList.contains('cms-edit-mode')) return;
 
         // Разрешаем клики внутри элементов интерфейса CMS
-        if (e.target.closest('#cms-userbar, #cms-revisions-pop, #cms-toolbar, #cms-img-modal, #cms-progress-bar')) return;
+        if (e.target.closest('#cms-userbar-container, #cms-img-modal')) return;
 
         // Перехватываем ссылки, кнопки и сабмиты страниц
         const clickable = e.target.closest('a, button, input[type="submit"], input[type="button"]');
@@ -132,76 +132,25 @@
             ? `<input type="file" id="cms-img-input" class="cms-tb-file" accept="image/*">`
             : `<span style="color: #ff4d4f; font-size: 11px; font-weight: 600;">Ошибка: Требуется расширение Imagick или GD</span>`;
 
-        // 1. Выплывающий тулбар форматирования
-        const toolbar = document.createElement('div');
-        toolbar.id = 'cms-toolbar';
-        toolbar.className = 'cms-glass-card';
-        toolbar.setAttribute('data-mode', 'text');
-        toolbar.innerHTML = `
-            <!-- Группа текстового форматирования -->
-            <div class="cms-tb-group" data-group="text">
-                <button class="cms-tb-btn" data-cmd="bold" title="Жирный">
-                    <span class="tabler-icon tabler--bold"></span>
-                </button>
-                <button class="cms-tb-btn" data-cmd="italic" title="Курсив">
-                    <span class="tabler-icon tabler--italic"></span>
-                </button>
-                <button class="cms-tb-btn" data-cmd="underline" title="Подчеркнутый">
-                    <span class="tabler-icon tabler--underline"></span>
-                </button>
-                <button class="cms-tb-btn" data-cmd="strikeThrough" title="Зачеркнутый">
-                    <span class="tabler-icon tabler--strikethrough"></span>
-                </button>
-                
-                <div class="cms-tb-divider"></div>
-                
-                <button class="cms-tb-btn" data-cmd="createLink" title="Ссылка">
-                    <span class="tabler-icon tabler--link"></span>
-                </button>
-                <button class="cms-tb-btn" data-cmd="span" title="Span">
-                    <span class="cms-tb-text">span</span>
-                </button>
-                <button class="cms-tb-btn" data-cmd="removeFormat" title="Очистить форматирование">
-                    <span class="tabler-icon tabler--clear-formatting"></span>
-                </button>
-            </div>
+        // Прозрачный родительский контейнер для юзербара и его выплывающих блоков
+        const userbarContainer = document.createElement('div');
+        userbarContainer.id = 'cms-userbar-container';
 
-            <!-- Группа редактирования ссылки (A) -->
-            <div class="cms-tb-group" data-group="link">
-                <label for="cms-link-input" class="cms-tb-label">Ссылка:</label>
-                <input type="text" id="cms-link-input" class="cms-tb-input" placeholder="https://example.com">
-            </div>
+        if (!data.php_valid) {
+            userbarContainer.innerHTML = `
+                <div id="cms-userbar" class="cms-glass-card">
+                    <span style="color: #ff4d4f; font-weight: 600;">
+                        Ошибка: Требуется PHP 8.4+ (Ваша версия: ${data.php_version})
+                    </span>
+                    <button class="cms-logout-btn" id="cms-btn-logout">Выйти</button>
+                </div>
+            `;
+            document.body.appendChild(userbarContainer);
+            initLogoutEvent();
+            return;
+        }
 
-            <!-- Группа загрузки изображения (IMG) -->
-            <div class="cms-tb-group" data-group="image">
-                ${imageGroupHtml}
-            </div>
-        `;
-        document.body.appendChild(toolbar);
-
-        // 1.1 Модальное окно выбора из нескольких наложенных картинок
-        const imgModal = document.createElement('div');
-        imgModal.id = 'cms-img-modal';
-        imgModal.className = 'cms-glass-card';
-        imgModal.innerHTML = `
-            <div class="cms-img-modal-header">Выберите изображение:</div>
-            <div class="cms-img-modal-list"></div>
-        `;
-        document.body.appendChild(imgModal);
-
-        // 1.2 Выплывающий блок прогресса поочередной загрузки
-        const progressBar = document.createElement('div');
-        progressBar.id = 'cms-progress-bar';
-        progressBar.className = 'cms-glass-card';
-        progressBar.innerHTML = `
-            <span class="cms-progress-label" id="cms-progress-label">Загрузка изображений (0/0)</span>
-            <div class="cms-progress-track">
-                <div class="cms-progress-fill" id="cms-progress-fill"></div>
-            </div>
-        `;
-        document.body.appendChild(progressBar);
-
-        // 1.3 Всплывающее окно списка ревизий над кнопкой
+        // Ревизии
         const revisions = data.revisions || [];
         let revItemsHtml = '';
         if (revisions.length === 0) {
@@ -212,14 +161,98 @@
             });
         }
 
-        const revsPop = document.createElement('div');
-        revsPop.id = 'cms-revisions-pop';
-        revsPop.className = 'cms-glass-card';
-        revsPop.innerHTML = `
-            <div class="revisions-pop-header">История ревизий</div>
-            <ul>${revItemsHtml}</ul>
+        userbarContainer.innerHTML = `
+            <!-- 1.1 Выплывающий тулбар форматирования -->
+            <div id="cms-toolbar" class="cms-glass-card" data-mode="text">
+                <div class="cms-tb-group" data-group="text">
+                    <button class="cms-tb-btn" data-cmd="bold" title="Жирный">
+                        <span class="tabler-icon tabler--bold"></span>
+                    </button>
+                    <button class="cms-tb-btn" data-cmd="italic" title="Курсив">
+                        <span class="tabler-icon tabler--italic"></span>
+                    </button>
+                    <button class="cms-tb-btn" data-cmd="underline" title="Подчеркнутый">
+                        <span class="tabler-icon tabler--underline"></span>
+                    </button>
+                    <button class="cms-tb-btn" data-cmd="strikeThrough" title="Зачеркнутый">
+                        <span class="tabler-icon tabler--strikethrough"></span>
+                    </button>
+                    
+                    <div class="cms-tb-divider"></div>
+                    
+                    <button class="cms-tb-btn" data-cmd="createLink" title="Ссылка">
+                        <span class="tabler-icon tabler--link"></span>
+                    </button>
+                    <button class="cms-tb-btn" data-cmd="span" title="Span">
+                        <span class="cms-tb-text">span</span>
+                    </button>
+                    <button class="cms-tb-btn" data-cmd="removeFormat" title="Очистить форматирование">
+                        <span class="tabler-icon tabler--clear-formatting"></span>
+                    </button>
+                </div>
+
+                <div class="cms-tb-group" data-group="link">
+                    <label for="cms-link-input" class="cms-tb-label">Ссылка:</label>
+                    <input type="text" id="cms-link-input" class="cms-tb-input" placeholder="https://example.com">
+                </div>
+
+                <div class="cms-tb-group" data-group="image">
+                    ${imageGroupHtml}
+                </div>
+            </div>
+
+            <!-- 1.2 Выплывающий блок прогресса загрузки -->
+            <div id="cms-progress-bar" class="cms-glass-card">
+                <span class="cms-progress-label" id="cms-progress-label">Загрузка изображений (0/0)</span>
+                <div class="cms-progress-track">
+                    <div class="cms-progress-fill" id="cms-progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- 1.3 Всплывающий список ревизий -->
+            <div id="cms-revisions-pop" class="cms-glass-card">
+                <div class="revisions-pop-header">История ревизий</div>
+                <ul>${revItemsHtml}</ul>
+            </div>
+
+            <!-- 1.4 Главный юзербар -->
+            <div id="cms-userbar" class="cms-glass-card">
+                <label class="cms-switch-label" title="Включить/выключить режим редактирования">
+                    <input type="checkbox" class="cms-switch-input" id="cms-toggle-edit">
+                    <span class="cms-switch-slider"></span>
+                    <span>Редактировать</span>
+                </label>
+
+                <div class="cms-rev-btn" id="cms-btn-revs" title="История ревизий">
+                    <span class="tabler-icon tabler--history"></span>
+                    <span class="cms-rev-text">Ревизии</span>
+                    <span class="cms-badge" id="cms-revs-badge">${revisions.length}</span>
+                </div>
+
+                <button class="cms-btn-save" id="cms-btn-save" disabled>
+                    <span class="tabler-icon tabler--device-floppy" style="vertical-align: middle; margin-right: 4px;"></span>
+                    <span class="tabler-icon tabler--loader-2" style="vertical-align: middle; margin-right: 4px;"></span>
+                    Сохранить
+                </button>
+                <button class="cms-logout-btn" id="cms-btn-logout" title="Выйти ('${data.user}')">
+                    <span class="cms-logout-text">Выйти</span>
+                    <span class="tabler-icon tabler--logout"></span>
+                </button>
+            </div>
         `;
-        document.body.appendChild(revsPop);
+        document.body.appendChild(userbarContainer);
+
+        // 2. Модальное окно выбора из нескольких наложенных картинок
+        const imgModal = document.createElement('div');
+        imgModal.id = 'cms-img-modal';
+        imgModal.className = 'cms-glass-card';
+        imgModal.innerHTML = `
+            <div class="cms-img-modal-header">Выберите изображение:</div>
+            <div class="cms-img-modal-list"></div>
+        `;
+        document.body.appendChild(imgModal);
+
+        const toolbar = document.getElementById('cms-toolbar');
 
         // Предотвращаем потерю фокуса при клике по кнопкам тулбара (кроме инпутов)
         toolbar.addEventListener('mousedown', (e) => {
@@ -317,47 +350,9 @@
             }
         });
 
-        // 2. Бар управления
-        const bar = document.createElement('div');
-        bar.id = 'cms-userbar';
-        bar.className = 'cms-glass-card';
-
-        if (!data.php_valid) {
-            bar.innerHTML = `
-                <span style="color: #ff4d4f; font-weight: 600;">
-                    Ошибка: Требуется PHP 8.4+ (Ваша версия: ${data.php_version})
-                </span>
-                <button class="cms-logout-btn" id="cms-btn-logout">Выйти</button>
-            `;
-            document.body.appendChild(bar);
-            initLogoutEvent();
-            return;
-        }
-
-        bar.innerHTML = `
-            <label class="cms-switch-label" title="Включить/выключить режим редактирования">
-                <input type="checkbox" class="cms-switch-input" id="cms-toggle-edit">
-                <span class="cms-switch-slider"></span>
-                <span>Редактировать</span>
-            </label>
-
-            <button class="cms-rev-btn" id="cms-btn-revs" title="История ревизий">
-                <span class="tabler-icon tabler--history"></span>
-                <span>Ревизии</span>
-                <span class="cms-badge" id="cms-revs-badge">${revisions.length}</span>
-            </button>
-
-            <button class="cms-btn-save" id="cms-btn-save" disabled>
-                <span class="tabler-icon tabler--device-floppy" style="vertical-align: middle; margin-right: 4px;"></span>
-                <span class="tabler-icon tabler--loader-2" style="vertical-align: middle; margin-right: 4px;"></span>
-                Сохранить
-            </button>
-            <button class="cms-logout-btn" id="cms-btn-logout" title="Выйти ('${data.user}')">Выйти</button>
-        `;
-        document.body.appendChild(bar);
-
-        // Обработка кнопки открытия ревизий в юзербаре
+        // Обработка клика по кнопке открытия ревизий в юзербаре
         const btnRevs = document.getElementById('cms-btn-revs');
+        const revsPop = document.getElementById('cms-revisions-pop');
         btnRevs.addEventListener('click', (e) => {
             e.stopPropagation();
             revsPop.classList.toggle('active');
@@ -452,7 +447,7 @@
                     })
                     .then(res => {
                         if (res && res.success) {
-                            location.reload(); // Перезагрузка ТАКИ НУЖНА при откате ревизии!
+                            location.reload();
                         } else {
                             alert('Ошибка отката: ' + (res.message || 'Неизвестная ошибка'));
                         }
@@ -575,8 +570,8 @@
         document.addEventListener('click', (e) => {
             if (!document.body.classList.contains('cms-edit-mode')) return;
 
-            // Разрешаем клики по внутренностям интерфейса CMS
-            if (e.target.closest('#cms-toolbar, #cms-userbar, #cms-revisions-pop, #cms-img-modal, #cms-progress-bar')) return;
+            // Разрешаем клики внутри элементов интерфейса CMS
+            if (e.target.closest('#cms-userbar-container, #cms-img-modal')) return;
 
             // Закрываем модальное окно выбора картинок и окно ревизий
             if (imgModal) imgModal.classList.remove('active');
@@ -658,7 +653,7 @@
                 }
             });
 
-            // ШАГ 1: Сохранение текстовых изменений (если они есть)
+            // ШАГ 1: Первичное сохранение текстовых изменений (если они есть)
             if (Object.keys(changes).length > 0) {
                 const formData = new FormData();
                 formData.append('filepath', getCustomFilePath());

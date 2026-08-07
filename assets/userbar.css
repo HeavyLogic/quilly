@@ -1,13 +1,11 @@
 :root {
-    --cms-popup-bottom: 72px; /* Единый отступ для всех всплывающих блоков над юзербаром */
+    --cms-popup-gap: 12px; /* Единый вертикальный отступ для всех всплывающих блоков над баром */
 }
 
 /* ===================================================
    ОБЩИЙ КЛАСС ТЁМНОГО МАТОВОГО СТЕКЛА (DARK GLASS)
    =================================================== */
 .cms-glass-card {
-    position: fixed;
-    width: max-content;
     background: rgba(20, 20, 20, 0.65); /* Тёмное матовое стекло */
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -20,23 +18,34 @@
     z-index: 999999;
 }
 
-/* 1. Позиция центрального бара управления */
-#cms-userbar {
+/* Прозрачный родительский контейнер позиционирования (без своего размытия!) */
+#cms-userbar-container {
+    position: fixed;
     bottom: 15px;
     left: 50%;
     transform: translateX(-50%);
+    z-index: 999999;
+    pointer-events: none;
+    width: max-content;
+}
+
+/* 1. Позиция центрального бара управления */
+#cms-userbar {
+    position: relative;
     border-radius: 50px;
     padding: 8px 18px;
     display: flex;
     align-items: center;
     gap: 16px;
+    pointer-events: auto;
 }
 
-/* 1.1. Выплывающий тулбар форматирования (над юзербаром) */
+/* 1.1. Выплывающий тулбар форматирования */
 #cms-toolbar {
-    bottom: var(--cms-popup-bottom);
+    position: absolute;
+    bottom: calc(100% + var(--cms-popup-gap));
     left: 50%;
-    transform: translateX(-50%) translateY(35px);
+    transform: translateX(-50%) translateY(10px);
     opacity: 0;
     pointer-events: none;
     border-radius: 30px;
@@ -58,14 +67,15 @@ body.cms-edit-mode:has(.editable.cms-active-target) #cms-toolbar {
 body.cms-ajax-loading #cms-toolbar {
     opacity: 0 !important;
     pointer-events: none !important;
-    transform: translateX(-50%) translateY(35px) !important;
+    transform: translateX(-50%) translateY(10px) !important;
 }
 
 /* 1.2. Блок индикатора поочередной загрузки */
 #cms-progress-bar {
-    bottom: var(--cms-popup-bottom);
+    position: absolute;
+    bottom: calc(100% + var(--cms-popup-gap));
     left: 50%;
-    transform: translateX(-50%) translateY(35px);
+    transform: translateX(-50%) translateY(10px);
     opacity: 0;
     pointer-events: none;
     border-radius: 30px;
@@ -106,11 +116,12 @@ body.cms-ajax-loading #cms-toolbar {
     transition: width 0.3s ease;
 }
 
-/* 1.3. Всплывающее окно ревизий (над кнопкой ревизий) */
+/* 1.3. Всплывающее окно ревизий (по центру бара) */
 #cms-revisions-pop {
-    bottom: var(--cms-popup-bottom);
+    position: absolute;
+    bottom: calc(100% + var(--cms-popup-gap));
     left: 50%;
-    transform: translateX(-50%) translateY(35px);
+    transform: translateX(-50%) translateY(10px);
     opacity: 0;
     pointer-events: none;
     border-radius: 20px;
@@ -221,7 +232,7 @@ body.cms-ajax-loading #cms-toolbar {
     color: #ffffff;
 }
 
-/* Кнопка открытия ревизий в юзербаре */
+/* Блок-кнопка открытия ревизий в юзербаре */
 .cms-rev-btn {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -325,6 +336,13 @@ body.cms-ajax-loading #cms-toolbar {
     --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 8v4l3 3m6-3a9 9 0 1 1-3-6.7L21 8m0-4v4h-4'/%3E%3C/svg%3E");
     -webkit-mask-image: var(--svg);
     mask-image: var(--svg);
+}
+
+.tabler--logout {
+    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'%3E%3Cpath d='M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2'/%3E%3Cpath d='M9 12h12l-3-3m0 6l3-3'/%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-image: var(--svg);
+    mask-image: var(--svg);
+    display: none;
 }
 
 /* ===================================================
@@ -495,6 +513,8 @@ body.cms-ajax-loading .cms-btn-save .tabler--loader-2 {
     transition: color 0.2s;
     margin-left: 4px;
     padding: 0;
+    display: flex;
+    align-items: center;
 }
 .cms-logout-btn:hover { color: #ffffff; }
 
@@ -566,4 +586,26 @@ body.cms-edit-mode .editable.cms-active-target {
 body.cms-edit-mode .editable li,
 body.cms-edit-mode li.editable {
     min-height: 1em;
+}
+
+/* ===================================================
+   МОБИЛЬНАЯ АДАПТИВНОСТЬ (Экран <= 600px)
+   =================================================== */
+@media (max-width: 600px) {
+    #cms-userbar {
+        padding: 6px 14px;
+        gap: 12px;
+    }
+
+    /* Скрываем текстовые подписи */
+    .cms-switch-label span:last-child,
+    .cms-rev-text,
+    .cms-logout-text {
+        display: none !important;
+    }
+
+    /* Показываем иконку выходы вместо текста */
+    .cms-logout-btn .tabler--logout {
+        display: inline-block !important;
+    }
 }
