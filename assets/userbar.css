@@ -1,3 +1,7 @@
+:root {
+    --cms-popup-bottom: 72px; /* Единый отступ для всех всплывающих блоков над юзербаром */
+}
+
 /* ===================================================
    ОБЩИЙ КЛАСС ТЁМНОГО МАТОВОГО СТЕКЛА (DARK GLASS)
    =================================================== */
@@ -30,7 +34,7 @@
 
 /* 1.1. Выплывающий тулбар форматирования (над юзербаром) */
 #cms-toolbar {
-    bottom: 65px;
+    bottom: var(--cms-popup-bottom);
     left: 50%;
     transform: translateX(-50%) translateY(35px);
     opacity: 0;
@@ -43,15 +47,23 @@
     transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-#cms-toolbar.active {
+/* Автоматически показываем тулбар, если на странице есть активный элемент */
+body.cms-edit-mode:has(.editable.cms-active-target) #cms-toolbar {
     opacity: 1;
     pointer-events: auto;
     transform: translateX(-50%) translateY(0);
 }
 
+/* Принудительно скрываем тулбар во время AJAX-загрузки */
+body.cms-ajax-loading #cms-toolbar {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateX(-50%) translateY(35px) !important;
+}
+
 /* 1.2. Блок индикатора поочередной загрузки */
 #cms-progress-bar {
-    bottom: 65px;
+    bottom: var(--cms-popup-bottom);
     left: 50%;
     transform: translateX(-50%) translateY(35px);
     opacity: 0;
@@ -92,6 +104,43 @@
     background: #0066cc;
     border-radius: 10px;
     transition: width 0.3s ease;
+}
+
+/* 1.3. Всплывающее окно ревизий (над кнопкой ревизий) */
+#cms-revisions-pop {
+    bottom: var(--cms-popup-bottom);
+    left: 50%;
+    transform: translateX(-50%) translateY(35px);
+    opacity: 0;
+    pointer-events: none;
+    border-radius: 20px;
+    padding: 12px 16px;
+    max-height: 250px;
+    overflow-y: auto;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#cms-revisions-pop.active {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+.revisions-pop-header {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 8px;
+    color: rgba(255, 255, 255, 0.9);
+    text-align: center;
+}
+
+#cms-revisions-pop ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 /* Группы элементов тулбара по режимам (text / link / image) */
@@ -172,6 +221,27 @@
     color: #ffffff;
 }
 
+/* Кнопка открытия ревизий в юзербаре */
+.cms-rev-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.cms-rev-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
 /* Активное состояние кнопки */
 .cms-tb-btn.is-active {
     background: #0066cc;
@@ -245,6 +315,18 @@
     mask-image: var(--svg);
 }
 
+.tabler--loader-2 {
+    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 3a9 9 0 1 0 9 9'/%3E%3C/svg%3E");
+    -webkit-mask-image: var(--svg);
+    mask-image: var(--svg);
+}
+
+.tabler--history {
+    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 8v4l3 3m6-3a9 9 0 1 1-3-6.7L21 8m0-4v4h-4'/%3E%3C/svg%3E");
+    -webkit-mask-image: var(--svg);
+    mask-image: var(--svg);
+}
+
 /* ===================================================
    МОДАЛЬНОЕ ОКНО ВЫБОРА НАЛОЖЕННЫХ КАРТИНОК
    =================================================== */
@@ -312,15 +394,6 @@
     object-fit: contain;
 }
 
-/* 2. Позиция карточки ревизий справа внизу */
-#cms-revisions {
-    bottom: 15px;
-    right: 20px;
-    border-radius: 20px;
-    padding: 8px 16px;
-    cursor: pointer;
-}
-
 /* Переключатель (Switch) */
 .cms-switch-label {
     display: flex;
@@ -386,6 +459,33 @@
     cursor: not-allowed;
 }
 
+/* Иконки внутри кнопки «Сохранить» */
+.cms-btn-save .tabler--loader-2 {
+    display: none;
+}
+
+/* Анимация вращения спиннера */
+@keyframes cms-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Состояние во время AJAX-загрузки */
+body.cms-ajax-loading .cms-btn-save {
+    opacity: 0.7;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+body.cms-ajax-loading .cms-btn-save .tabler--device-floppy {
+    display: none !important;
+}
+
+body.cms-ajax-loading .cms-btn-save .tabler--loader-2 {
+    display: inline-block !important;
+    animation: cms-spin 1s linear infinite;
+}
+
 .cms-logout-btn {
     background: transparent;
     border: none;
@@ -399,14 +499,6 @@
 .cms-logout-btn:hover { color: #ffffff; }
 
 /* Ревизии */
-.revisions-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 500;
-    font-size: 13px;
-}
-
 .cms-badge {
     background: #0066cc;
     color: #ffffff;
@@ -414,26 +506,6 @@
     padding: 2px 6px;
     border-radius: 10px;
     font-weight: 700;
-}
-
-.revisions-wrapper {
-    height: 0px;
-    overflow: hidden;
-    position: relative;
-    transition: height 0.25s allow-discrete;
-}
-
-#cms-revisions:hover .revisions-wrapper {
-    height: auto;
-}
-
-.revisions-wrapper ul {
-    list-style: none;
-    padding: 10px 0 2px 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
 }
 
 .cms-rev-item {

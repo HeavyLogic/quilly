@@ -45,12 +45,47 @@
         editableEl.innerHTML = editableEl.innerHTML.replace(/<\/span>(\s*)<span[^>]*>/gi, '$1');
     };
 
+    // Динамическое обновление списка ревизий без перезагрузки страницы
+    const updateRevisionsUI = (revisions) => {
+        const revsList = document.querySelector('#cms-revisions-pop ul');
+        const revsBadge = document.getElementById('cms-revs-badge');
+
+        if (revsBadge) revsBadge.innerText = revisions.length;
+
+        if (revsList) {
+            let revItemsHtml = '';
+            if (revisions.length === 0) {
+                revItemsHtml = '<li class="cms-rev-empty">Нет ревизий</li>';
+            } else {
+                revisions.forEach(rev => {
+                    revItemsHtml += `<li class="cms-rev-item" data-file="${rev.filename}">${rev.date}</li>`;
+                });
+            }
+            revsList.innerHTML = revItemsHtml;
+        }
+    };
+
+    // Запрос свежего списка ревизий с сервера
+    const refreshRevisionsList = () => {
+        const customPath = getCustomFilePath();
+        fetch(`/admin/userapi.php?action=init_bar&filepath=${encodeURIComponent(customPath)}&url=${encodeURIComponent(window.location.href)}`, {
+            method: 'GET',
+            credentials: 'same-origin'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success && data.revisions) {
+                updateRevisionsUI(data.revisions);
+            }
+        });
+    };
+
     // Блокировка кликов по кнопкам и ссылкам страницы в режиме редактирования
     document.addEventListener('click', (e) => {
         if (!document.body.classList.contains('cms-edit-mode')) return;
 
         // Разрешаем клики внутри элементов интерфейса CMS
-        if (e.target.closest('#cms-userbar, #cms-revisions, #cms-toolbar, #cms-img-modal, #cms-progress-bar')) return;
+        if (e.target.closest('#cms-userbar, #cms-revisions-pop, #cms-toolbar, #cms-img-modal, #cms-progress-bar')) return;
 
         // Перехватываем ссылки, кнопки и сабмиты страниц
         const clickable = e.target.closest('a, button, input[type="submit"], input[type="button"]');
@@ -165,6 +200,26 @@
             </div>
         `;
         document.body.appendChild(progressBar);
+
+        // 1.3 Всплывающее окно списка ревизий над кнопкой
+        const revisions = data.revisions || [];
+        let revItemsHtml = '';
+        if (revisions.length === 0) {
+            revItemsHtml = '<li class="cms-rev-empty">Нет ревизий</li>';
+        } else {
+            revisions.forEach(rev => {
+                revItemsHtml += `<li class="cms-rev-item" data-file="${rev.filename}">${rev.date}</li>`;
+            });
+        }
+
+        const revsPop = document.createElement('div');
+        revsPop.id = 'cms-revisions-pop';
+        revsPop.className = 'cms-glass-card';
+        revsPop.innerHTML = `
+            <div class="revisions-pop-header">История ревизий</div>
+            <ul>${revItemsHtml}</ul>
+        `;
+        document.body.appendChild(revsPop);
 
         // Предотвращаем потерю фокуса при клике по кнопкам тулбара (кроме инпутов)
         toolbar.addEventListener('mousedown', (e) => {
@@ -286,51 +341,37 @@
                 <span>Редактировать</span>
             </label>
 
+            <button class="cms-rev-btn" id="cms-btn-revs" title="История ревизий">
+                <span class="tabler-icon tabler--history"></span>
+                <span>Ревизии</span>
+                <span class="cms-badge" id="cms-revs-badge">${revisions.length}</span>
+            </button>
+
             <button class="cms-btn-save" id="cms-btn-save" disabled>
                 <span class="tabler-icon tabler--device-floppy" style="vertical-align: middle; margin-right: 4px;"></span>
+                <span class="tabler-icon tabler--loader-2" style="vertical-align: middle; margin-right: 4px;"></span>
                 Сохранить
             </button>
             <button class="cms-logout-btn" id="cms-btn-logout" title="Выйти ('${data.user}')">Выйти</button>
         `;
         document.body.appendChild(bar);
 
-        // 3. Карточка ревизий
-        const revisions = data.revisions || [];
-        let revItemsHtml = '';
-        
-        if (revisions.length === 0) {
-            revItemsHtml = '<li class="cms-rev-empty">Нет ревизий</li>';
-        } else {
-            revisions.forEach(rev => {
-                revItemsHtml += `<li class="cms-rev-item" data-file="${rev.filename}">${rev.date}</li>`;
-            });
-        }
-
-        const revsBox = document.createElement('div');
-        revsBox.id = 'cms-revisions';
-        revsBox.className = 'cms-glass-card';
-        revsBox.innerHTML = `
-            <div class="revisions-header">
-                <span>Ревизии</span>
-                <span class="cms-badge">${revisions.length}</span>
-            </div>
-            <div class="revisions-wrapper">
-                <ul>
-                    ${revItemsHtml}
-                </ul>
-            </div>
-        `;
-        document.body.appendChild(revsBox);
+        // Обработка кнопки открытия ревизий в юзербаре
+        const btnRevs = document.getElementById('cms-btn-revs');
+        btnRevs.addEventListener('click', (e) => {
+            e.stopPropagation();
+            revsPop.classList.toggle('active');
+        });
 
         initEditorEvents();
         initLogoutEvent();
         initRollbackEvents();
     };
 
-    // Проверка активности тегов под кареткой (проверка физических DOM-тегов)
+    // Проверка активности тегов под кареткой
     const updateToolbarButtonStates = () => {
         const toolbar = document.getElementById('cms-toolbar');
-        if (!toolbar || !toolbar.classList.contains('active')) return;
+        if (!toolbar) return;
 
         toolbar.querySelectorAll('.cms-tb-btn[data-cmd]').forEach(btn => {
             const cmd = btn.getAttribute('data-cmd');
@@ -411,7 +452,7 @@
                     })
                     .then(res => {
                         if (res && res.success) {
-                            location.reload();
+                            location.reload(); // Перезагрузка ТАКИ НУЖНА при откате ревизии!
                         } else {
                             alert('Ошибка отката: ' + (res.message || 'Неизвестная ошибка'));
                         }
@@ -431,7 +472,6 @@
         const tagName = target.tagName.toUpperCase();
 
         if (blacklistedTags.includes(tagName)) {
-            toolbar.classList.remove('active');
             setActiveElement(null);
             return;
         }
@@ -461,7 +501,6 @@
             toolbar.setAttribute('data-mode', 'text');
         }
 
-        toolbar.classList.add('active');
         updateToolbarButtonStates();
     };
 
@@ -495,8 +534,8 @@
     const initEditorEvents = () => {
         const toggle = document.getElementById('cms-toggle-edit');
         const btnSave = document.getElementById('cms-btn-save');
-        const toolbar = document.getElementById('cms-toolbar');
         const imgModal = document.getElementById('cms-img-modal');
+        const revsPop = document.getElementById('cms-revisions-pop');
         const progressBar = document.getElementById('cms-progress-bar');
         const progressLabel = document.getElementById('cms-progress-label');
         const progressFill = document.getElementById('cms-progress-fill');
@@ -508,8 +547,8 @@
                 document.body.classList.add('cms-edit-mode');
             } else {
                 document.body.classList.remove('cms-edit-mode');
-                toolbar.classList.remove('active');
                 if (imgModal) imgModal.classList.remove('active');
+                if (revsPop) revsPop.classList.remove('active');
                 if (progressBar) progressBar.classList.remove('active');
                 setActiveElement(null);
                 cleanupEmptyBr();
@@ -536,11 +575,12 @@
         document.addEventListener('click', (e) => {
             if (!document.body.classList.contains('cms-edit-mode')) return;
 
-            // Если кликнули по интерфейсу CMS — ничего не делаем
-            if (e.target.closest('#cms-toolbar, #cms-userbar, #cms-revisions, #cms-img-modal, #cms-progress-bar')) return;
+            // Разрешаем клики по внутренностям интерфейса CMS
+            if (e.target.closest('#cms-toolbar, #cms-userbar, #cms-revisions-pop, #cms-img-modal, #cms-progress-bar')) return;
 
-            // Закрываем модальное окно выбора картинок при клике в другое место
+            // Закрываем модальное окно выбора картинок и окно ревизий
             if (imgModal) imgModal.classList.remove('active');
+            if (revsPop) revsPop.classList.remove('active');
 
             // Страховка от закрытия тулбара при протяжке выделения мышкой за границы элемента
             const sel = window.getSelection();
@@ -557,7 +597,6 @@
             );
 
             if (hitEditableImgs.length > 1) {
-                toolbar.classList.remove('active');
                 setActiveElement(null);
                 showImagePickerModal(hitEditableImgs);
                 return;
@@ -571,7 +610,6 @@
             if (target) {
                 activateToolbarForElement(target);
             } else {
-                toolbar.classList.remove('active');
                 setActiveElement(null);
             }
         });
@@ -595,15 +633,14 @@
             }
         });
 
-        // Нажатие кнопки "Сохранить" (Двухэтапное сохранение + Поочередная загрузка)
+        // Нажатие кнопки "Сохранить" (БЕЗ ПЕРЕЗАГРУЗКИ СТРАНИЦЫ)
         btnSave.addEventListener('click', async () => {
             if (editedElements.size === 0) return;
 
+            // Активируем глобальное состояние AJAX загрузки
+            document.body.classList.add('cms-ajax-loading');
             btnSave.setAttribute('disabled', 'true');
-            btnSave.innerText = 'Сохранение...';
-
-            // Скрываем обычный тулбар
-            toolbar.classList.remove('active');
+            if (revsPop) revsPop.classList.remove('active');
 
             const changes = {};
             const imageTasks = [];
@@ -621,9 +658,8 @@
                 }
             });
 
-            // ШАГ 1: Первичное сохранение текстовых изменений (если они есть)
+            // ШАГ 1: Сохранение текстовых изменений (если они есть)
             if (Object.keys(changes).length > 0) {
-                btnSave.innerText = 'Сохранение текста...';
                 const formData = new FormData();
                 formData.append('filepath', getCustomFilePath());
                 formData.append('url', window.location.href);
@@ -642,13 +678,13 @@
                     }
                 } catch (err) {
                     alert('Ошибка при сохранении текста: ' + err.message);
+                    document.body.classList.remove('cms-ajax-loading');
                     btnSave.removeAttribute('disabled');
-                    btnSave.innerText = 'Сохранить';
                     return;
                 }
             }
 
-            // ШАГ 2: Поочередная загрузка изображений по одному файлу
+            // ШАГ 2: Поочередная загрузка изображений
             if (imageTasks.length > 0) {
                 progressFill.style.width = '0%';
                 progressLabel.innerText = `Загрузка изображений (0/${imageTasks.length})`;
@@ -694,8 +730,8 @@
                     } catch (err) {
                         alert(`Ошибка при загрузке изображения ${i + 1} из ${total}: ` + err.message);
                         progressBar.classList.remove('active');
+                        document.body.classList.remove('cms-ajax-loading');
                         btnSave.removeAttribute('disabled');
-                        btnSave.innerText = 'Сохранить';
                         return;
                     }
                 }
@@ -703,8 +739,16 @@
                 progressBar.classList.remove('active');
             }
 
-            // ШАГ 3: Перезагрузка страницы по завершению всех этапов
-            location.reload();
+            // ШАГ 3: Мягкое финализирование состояния на клиенте БЕЗ перезагрузки страницы
+            document.body.classList.remove('cms-ajax-loading');
+            editedElements.clear();
+            stagedImageFiles.clear();
+            document.querySelectorAll('.editable.edited').forEach(el => el.classList.remove('edited'));
+            btnSave.setAttribute('disabled', 'true');
+            setActiveElement(null);
+
+            // Бесшовно обновляем список ревизий и счетчик
+            refreshRevisionsList();
         });
     };
 })();
