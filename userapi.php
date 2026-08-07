@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json');
 
-// Точка входа в CMS и подключение конфигурации
+// --- НАСТРОЙКИ И ДЕБАГ ---
 define('CMS_EXEC', true);
 require_once __DIR__ . '/config.php';
 
@@ -432,7 +432,7 @@ switch ($action) {
         ]);
         responseSuccess();
 
-    // 3. Загрузка ровно ОДНОГО изображения (Поочередная загрузка)
+    // 3. Загрузка ровно ОДНОГО изображения (БЕЗ создания ревизии и БЕЗ перезаписи HTML)
     case 'upload_single_image':
         $user = getAuthUser(CMS_CONFIG['db_path']);
         if (!$user) responseError('Доступ запрещен');
@@ -460,9 +460,6 @@ switch ($action) {
         }
 
         try {
-            // Создаем ZIP-ревизию (если еще не создана для текущего состояния)
-            makeRevision($fullPath, $targetRelPath, $rootDir, $url);
-
             $uploadSubDir = CMS_CONFIG['images']['upload_dir'];
             $uploadsDir = $rootDir . '/' . $uploadSubDir;
             if (!is_dir($uploadsDir)) {
@@ -503,35 +500,64 @@ switch ($action) {
                 @move_uploaded_file($tmpFile, $outputFullPath);
             }
 
-            // Обновляем HTML в DOM
-            $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
-            $imgElement = $doc->getElementById($targetId);
-
-            if ($imgElement) {
-                $oldSrc = trim($imgElement->getAttribute('src') ?? '');
-                $oldLocalPath = resolveLocalImagePath($oldSrc, $url, $rootDir);
-
-                $imgElement->setAttribute('src', $htmlSrc);
-
-                // Если старая локальная картинка отличалась — удаляем её
-                if ($oldLocalPath && realpath($oldLocalPath) !== realpath($outputFullPath)) {
-                    if (@unlink($oldLocalPath)) {
-                        writeDebugLog("Удалена старая заменённая картинка: '{$oldLocalPath}'");
-                    }
+            // Подчищаем старую заменённую локальную картинку с диска
+            $targetSrc = trim($_POST['target_src'] ?? '');
+            $oldLocalPath = resolveLocalImagePath($targetSrc, $url, $rootDir);
+            if ($oldLocalPath && realpath($oldLocalPath) !== realpath($outputFullPath)) {
+                if (@unlink($oldLocalPath)) {
+                    writeDebugLog("Удалена старая заменённая картинка: '{$oldLocalPath}'");
                 }
-
-                $doc->saveHtmlFile($fullPath);
-                responseSuccess(['relative_path' => $htmlSrc]);
-            } else {
-                responseError('Элемент #' . $targetId . ' не найден в HTML');
             }
+
+            // Возвращаем новый относительный путь БЕЗ перезаписи HTML-файла на диске
+            responseSuccess(['relative_path' => $htmlSrc]);
 
         } catch (Throwable $e) {
             writeDebugLog("PHP Exception при upload_single_image: " . $e->getMessage());
             responseError('Ошибка загрузки: ' . $e->getMessage());
         }
 
-    // 4. Сохранение текстовых изменений в HTML
+    // 4. Финальное ОДНОКРАТНОЕ обновление путей всех загруженных картинок в HTML
+    case 'finalize_images':
+        $user = getAuthUser(CMS_CONFIG['db_path']);
+        if (!$user) responseError('Доступ запрещен');
+
+        $rootDir = realpath(__DIR__ . '/../');
+        $customFilePath = trim($_POST['filepath'] ?? '');
+        $url = $_POST['url'] ?? '';
+
+        $targetRelPath = resolveTargetRelPath($customFilePath, $url, $rootDir);
+        $fullPath = $rootDir . '/' . $targetRelPath;
+
+        if (!file_exists($fullPath)) {
+            responseError('Файл страницы не найден: ' . $targetRelPath);
+        }
+
+        $imageUpdates = json_decode($_POST['image_updates'] ?? '{}', true) ?? [];
+        if (empty($imageUpdates)) {
+            responseSuccess(['message' => 'Нет обновлений изображений']);
+        }
+
+        try {
+            $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
+
+            foreach ($imageUpdates as $id => $newSrc) {
+                $imgElement = $doc->getElementById($id);
+                if ($imgElement) {
+                    $imgElement->setAttribute('src', $newSrc);
+                }
+            }
+
+            $doc->saveHtmlFile($fullPath);
+            writeDebugLog("finalize_images(): Успешно обновлены src у " . count($imageUpdates) . " картинок в HTML");
+            responseSuccess(['saved_file' => $targetRelPath]);
+
+        } catch (Throwable $e) {
+            writeDebugLog("PHP Exception при finalize_images: " . $e->getMessage());
+            responseError('Ошибка обновления HTML: ' . $e->getMessage());
+        }
+
+    // 5. Сохранение текстовых изменений в HTML + Создание 1 РЕВИЗИИ
     case 'save_page':
         $user = getAuthUser(CMS_CONFIG['db_path']);
         if (!$user) responseError('Доступ запрещен');
@@ -561,36 +587,39 @@ switch ($action) {
         try {
             writeRevisionDebugLog("save_page(): Клиент вызвал сохранение для '{$targetRelPath}'");
 
-            // ШАГ 1: Создаем ZIP-ревизию ТЕКУЩЕГО живого состояния (HTML + старые картинки)
+            // ШАГ 1: Создаем ровно 1 ZIP-ревизию ТЕКУЩЕГО живого состояния (HTML + старые картинки)
             makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
             // ШАГ 2: Сохраняем текстовые изменения
-            $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
+            if (!empty($changes)) {
+                $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
 
-            foreach ($changes as $id => $payload) {
-                $element = $doc->getElementById($id);
-                if ($element && isset($payload['html'])) {
-                    while ($element->firstChild) {
-                        $element->removeChild($element->firstChild);
-                    }
+                foreach ($changes as $id => $payload) {
+                    $element = $doc->getElementById($id);
+                    if ($element && isset($payload['html'])) {
+                        while ($element->firstChild) {
+                            $element->removeChild($element->firstChild);
+                        }
 
-                    $fragDoc = Dom\HTMLDocument::createFromString(
-                        '<!DOCTYPE html><html><body><div id="cms-temp-fragment-wrapper">' . $payload['html'] . '</div></body></html>',
-                        LIBXML_NOERROR
-                    );
+                        $fragDoc = Dom\HTMLDocument::createFromString(
+                            '<!DOCTYPE html><html><body><div id="cms-temp-fragment-wrapper">' . $payload['html'] . '</div></body></html>',
+                            LIBXML_NOERROR
+                        );
 
-                    $wrapper = $fragDoc->getElementById('cms-temp-fragment-wrapper');
-                    if ($wrapper) {
-                        foreach ($wrapper->childNodes as $childNode) {
-                            $importedNode = $doc->importNode($childNode, true);
-                            $element->appendChild($importedNode);
+                        $wrapper = $fragDoc->getElementById('cms-temp-fragment-wrapper');
+                        if ($wrapper) {
+                            foreach ($wrapper->childNodes as $childNode) {
+                                $importedNode = $doc->importNode($childNode, true);
+                                $element->appendChild($importedNode);
+                            }
                         }
                     }
                 }
+
+                // Фиксируем текст на диске
+                $doc->saveHtmlFile($fullPath);
             }
 
-            // Фиксируем текст на диске
-            $doc->saveHtmlFile($fullPath);
             responseSuccess(['saved_file' => $targetRelPath]);
 
         } catch (Throwable $e) {
@@ -598,7 +627,7 @@ switch ($action) {
             responseError('Ошибка сохранения PHP: ' . $e->getMessage());
         }
 
-    // 5. Откат к выбранной ZIP-ревизии
+    // 6. Откат к выбранной ZIP-ревизии
     case 'rollback_revision':
         $user = getAuthUser(CMS_CONFIG['db_path']);
         if (!$user) responseError('Доступ запрещен');

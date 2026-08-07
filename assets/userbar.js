@@ -1,4 +1,10 @@
 (() => {
+    // Подключаем стили
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/admin/assets/userbar.css';
+    document.head.appendChild(link);
+
     const editedElements = new Set();
     const stagedImageFiles = new Map(); // Хранилище файлов до клика "Сохранить"
     const blacklistedTags = ['VIDEO', 'CANVAS', 'AUDIO', 'INPUT', 'TEXTAREA'];
@@ -121,12 +127,6 @@
     });
 
     const renderUserbar = (data) => {
-        // Подключаем стили ТОЛЬКО для авторизованных пользователей
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = '/admin/assets/userbar.css';
-        document.head.appendChild(link);
-
         // Формируем блок загрузки картинки (или вывод ошибки, если нет Imagick/GD)
         const imageGroupHtml = data.img_library_valid
             ? `<input type="file" id="cms-img-input" class="cms-tb-file" accept="image/*">`
@@ -211,6 +211,7 @@
 
             <!-- 1.3 Всплывающий список ревизий (стартовая прозрачность задана инлайн) -->
             <div id="cms-revisions-pop" class="cms-glass-card" style="opacity: 0; pointer-events: none;">
+                <div class="revisions-pop-header">История ревизий</div>
                 <ul>${revItemsHtml}</ul>
             </div>
 
@@ -631,7 +632,7 @@
             }
         });
 
-        // Нажатие кнопки "Сохранить" (БЕЗ ПЕРЕЗАГРУЗКИ СТРАНИЦЫ)
+        // Нажатие кнопки "Сохранить" (3-Этапное оптимизированное сохранение)
         btnSave.addEventListener('click', async () => {
             if (editedElements.size === 0) return;
 
@@ -656,33 +657,33 @@
                 }
             });
 
-            // ШАГ 1: Первичное сохранение текстовых изменений (если они есть)
-            if (Object.keys(changes).length > 0) {
-                const formData = new FormData();
-                formData.append('filepath', getCustomFilePath());
-                formData.append('url', window.location.href);
-                formData.append('changes', JSON.stringify(changes));
+            // ШАГ 1: Первичное сохранение текста + СОЗДАНИЕ 1 РЕВИЗИИ (всегда запускается первым)
+            const formData = new FormData();
+            formData.append('filepath', getCustomFilePath());
+            formData.append('url', window.location.href);
+            formData.append('changes', JSON.stringify(changes));
 
-                try {
-                    const r = await fetch('/admin/userapi.php?action=save_page', {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        body: formData
-                    });
-                    const text = await r.text();
-                    const res = JSON.parse(text);
-                    if (!res || !res.success) {
-                        throw new Error(res.message || 'Ошибка сохранения текста');
-                    }
-                } catch (err) {
-                    alert('Ошибка при сохранении текста: ' + err.message);
-                    document.body.classList.remove('cms-ajax-loading');
-                    btnSave.removeAttribute('disabled');
-                    return;
+            try {
+                const r = await fetch('/admin/userapi.php?action=save_page', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: formData
+                });
+                const text = await r.text();
+                const res = JSON.parse(text);
+                if (!res || !res.success) {
+                    throw new Error(res.message || 'Ошибка сохранения текста');
                 }
+            } catch (err) {
+                alert('Ошибка при сохранении: ' + err.message);
+                document.body.classList.remove('cms-ajax-loading');
+                btnSave.removeAttribute('disabled');
+                return;
             }
 
-            // ШАГ 2: Поочередная загрузка изображений
+            // ШАГ 2: Поочередная загрузка изображений в /uploads/ БЕЗ создания ревизий и перезаписи HTML 40 раз
+            const imageUpdates = {};
+
             if (imageTasks.length > 0) {
                 progressFill.style.width = '0%';
                 progressLabel.innerText = `Загрузка изображений (0/${imageTasks.length})`;
@@ -695,18 +696,18 @@
                     const imgEl = document.getElementById(task.id);
                     const currentSrc = imgEl ? (imgEl.getAttribute('src') || '') : '';
 
-                    const formData = new FormData();
-                    formData.append('filepath', getCustomFilePath());
-                    formData.append('url', window.location.href);
-                    formData.append('target_id', task.id);
-                    formData.append('target_src', currentSrc);
-                    formData.append('image', task.file);
+                    const imgFormData = new FormData();
+                    imgFormData.append('filepath', getCustomFilePath());
+                    imgFormData.append('url', window.location.href);
+                    imgFormData.append('target_id', task.id);
+                    imgFormData.append('target_src', currentSrc);
+                    imgFormData.append('image', task.file);
 
                     try {
                         const r = await fetch('/admin/userapi.php?action=upload_single_image', {
                             method: 'POST',
                             credentials: 'same-origin',
-                            body: formData
+                            body: imgFormData
                         });
                         const text = await r.text();
                         const res = JSON.parse(text);
@@ -715,7 +716,10 @@
                             throw new Error(res.message || `Ошибка загрузки файла ${i + 1}`);
                         }
 
-                        // Обновляем src картинки в DOM
+                        // Сохраняем полученный новый путь к WebP файлу
+                        imageUpdates[task.id] = res.relative_path;
+
+                        // Обновляем визуальный src у картинки прямо в браузере
                         if (imgEl && res.relative_path) {
                             imgEl.setAttribute('src', res.relative_path);
                         }
@@ -735,9 +739,35 @@
                 }
 
                 progressBar.classList.remove('active');
+
+                // ШАГ 3: Финальное ОДНОКРАТНОЕ обновление HTML файла со всеми новыми путями к картинкам
+                if (Object.keys(imageUpdates).length > 0) {
+                    const finalFormData = new FormData();
+                    finalFormData.append('filepath', getCustomFilePath());
+                    finalFormData.append('url', window.location.href);
+                    finalFormData.append('image_updates', JSON.stringify(imageUpdates));
+
+                    try {
+                        const r = await fetch('/admin/userapi.php?action=finalize_images', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            body: finalFormData
+                        });
+                        const text = await r.text();
+                        const res = JSON.parse(text);
+                        if (!res || !res.success) {
+                            throw new Error(res.message || 'Ошибка обновления путей картинок в HTML');
+                        }
+                    } catch (err) {
+                        alert('Ошибка финализации изображений: ' + err.message);
+                        document.body.classList.remove('cms-ajax-loading');
+                        btnSave.removeAttribute('disabled');
+                        return;
+                    }
+                }
             }
 
-            // ШАГ 3: Мягкое финализирование состояния на клиенте БЕЗ перезагрузки страницы
+            // ШАГ 4: Мягкое финализирование состояния на клиенте БЕЗ перезагрузки страницы
             document.body.classList.remove('cms-ajax-loading');
             editedElements.clear();
             stagedImageFiles.clear();
