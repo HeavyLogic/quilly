@@ -1,10 +1,4 @@
 (() => {
-    // Подключаем стили
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = '/admin/assets/userbar.css';
-    document.head.appendChild(link);
-
     const editedElements = new Set();
     const stagedImageFiles = new Map(); // Хранилище файлов до клика "Сохранить"
     const blacklistedTags = ['VIDEO', 'CANVAS', 'AUDIO', 'INPUT', 'TEXTAREA'];
@@ -55,7 +49,9 @@
     const updateRevisionsUI = (revisions) => {
         const revsList = document.querySelector('#cms-revisions-pop ul');
         const revsBadge = document.getElementById('cms-revs-badge');
+        const btnRevs = document.getElementById('cms-btn-revs');
 
+        if (btnRevs) btnRevs.setAttribute('data-count', revisions.length);
         if (revsBadge) revsBadge.innerText = revisions.length;
 
         if (revsList) {
@@ -127,6 +123,12 @@
     });
 
     const renderUserbar = (data) => {
+        // Подключаем стили
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/admin/assets/userbar.css';
+        document.head.appendChild(link);
+
         // Формируем блок загрузки картинки (или вывод ошибки, если нет Imagick/GD)
         const imageGroupHtml = data.img_library_valid
             ? `<input type="file" id="cms-img-input" class="cms-tb-file" accept="image/*">`
@@ -211,7 +213,6 @@
 
             <!-- 1.3 Всплывающий список ревизий (стартовая прозрачность задана инлайн) -->
             <div id="cms-revisions-pop" class="cms-glass-card" style="opacity: 0; pointer-events: none;">
-                <div class="revisions-pop-header">История ревизий</div>
                 <ul>${revItemsHtml}</ul>
             </div>
 
@@ -223,7 +224,7 @@
                     <span>Редактировать</span>
                 </label>
 
-                <div class="cms-rev-btn" id="cms-btn-revs" title="История ревизий">
+                <div class="cms-rev-btn" id="cms-btn-revs" data-count="${revisions.length}" title="История ревизий">
                     <span class="tabler-icon tabler--history"></span>
                     <span class="cms-rev-text">Ревизии</span>
                     <span class="cms-badge" id="cms-revs-badge">${revisions.length}</span>
@@ -657,7 +658,7 @@
                 }
             });
 
-            // ШАГ 1: Сохранение текстов + СОЗДАНИЕ 1 РЕВИЗИИ (всегда первым)
+            // ШАГ 1: Первичное сохранение текста + СОЗДАНИЕ 1 РЕВИЗИИ (всегда первым)
             const formData = new FormData();
             formData.append('filepath', getCustomFilePath());
             formData.append('url', window.location.href);
@@ -681,7 +682,7 @@
                 return;
             }
 
-            // ШАГ 2: Поочередная загрузка изображений с МГНОВЕННОЙ записью в HTML каждого файла
+            // ШАГ 2: Поочередная загрузка изображений
             if (imageTasks.length > 0) {
                 progressFill.style.width = '0%';
                 progressLabel.innerText = `Загрузка изображений (0/${imageTasks.length})`;

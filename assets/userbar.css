@@ -254,6 +254,11 @@ body.cms-ajax-loading #cms-toolbar {
     border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* Скрытие кнопки ревизий через CSS, если число ревизий у страницы = 0 */
+.cms-rev-btn[data-count="0"] {
+    display: none !important;
+}
+
 /* Активное состояние кнопки */
 .cms-tb-btn.is-active {
     background: #0066cc;
@@ -580,7 +585,9 @@ body.cms-edit-mode .editable.edited {
 
 /* Активный выбранный элемент прямо сейчас */
 body.cms-edit-mode .editable.cms-active-target {
-    outline: 2px solid #2ec4b6 !important;
+    outline: 3px solid #ff007f !important;
+    outline-offset: 3px;
+    box-shadow: 0 0 10px rgba(255, 0, 127, 0.5) !important;
 }
 
 /* Минимальная высота пустых li при редактировании */

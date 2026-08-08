@@ -310,6 +310,12 @@ function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $root
 function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, string $url = ''): void {
     if (!file_exists($fullPath)) return;
 
+    $maxRevisions = (int)(CMS_CONFIG['max_revisions'] ?? 10);
+    if ($maxRevisions <= 0) {
+        writeRevisionDebugLog("makeRevision(): Создание ревизий отключено (max_revisions = {$maxRevisions})");
+        return;
+    }
+
     // Снимок формируется строго на основе даты последнего изменения файла (filemtime)
     $lastModTime = @filemtime($fullPath) ?: time();
     $dateStr = date('Y-m-d_H-i-s', $lastModTime);
@@ -346,10 +352,11 @@ function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, 
 
     $zip->close();
 
+    // Ротация бэкапов
     $zipFiles = @glob($revParentDir . '/*.zip');
-    if (is_array($zipFiles) && count($zipFiles) > 10) {
+    if (is_array($zipFiles) && count($zipFiles) > $maxRevisions) {
         sort($zipFiles);
-        while (count($zipFiles) > 10) {
+        while (count($zipFiles) > $maxRevisions) {
             $oldestZip = array_shift($zipFiles);
             if (file_exists($oldestZip)) {
                 @unlink($oldestZip);
@@ -470,7 +477,10 @@ switch ($action) {
             $origFullName = $_FILES['image']['name'];
             $origName = pathinfo($origFullName, PATHINFO_FILENAME);
             $origExt = strtolower(pathinfo($origFullName, PATHINFO_EXTENSION));
-            $cleanFilename = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $origName) ?: 'img';
+
+            // Юникод-фильтрация символов
+            $cleanFilename = preg_replace('/[^\p{L}\p{N}_\-]/u', '_', $origName);
+            $cleanFilename = trim(preg_replace('/_+/', '_', $cleanFilename), '_') ?: 'img';
 
             writeDebugLog("upload_single_image: Обработка '{$origFullName}' для элемента '#{$targetId}'");
 
