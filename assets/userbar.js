@@ -205,7 +205,7 @@
 
             <!-- 1.2 Выплывающий блок прогресса загрузки (стартовая прозрачность задана инлайн) -->
             <div id="cms-progress-bar" class="cms-glass-card" style="opacity: 0; pointer-events: none;">
-                <span class="cms-progress-label" id="cms-progress-label">Загрузка изображений (0/0)</span>
+                <span class="cms-progress-label" id="cms-progress-label">Загружено (0/0)</span>
                 <div class="cms-progress-track">
                     <div class="cms-progress-fill" id="cms-progress-fill"></div>
                 </div>
@@ -269,7 +269,11 @@
                 const file = inputImg.files[0];
                 if (!file || !currentActiveElement || currentActiveElement.tagName !== 'IMG') return;
 
-                // Локальный мгновенный превью прямо на странице
+                // 1. Сбрасываем srcset и sizes, чтобы браузер переключился на отображение src (blob)
+                currentActiveElement.removeAttribute('srcset');
+                currentActiveElement.removeAttribute('sizes');
+
+                // 2. Локальный мгновенный превью прямо на странице
                 currentActiveElement.src = URL.createObjectURL(file);
 
                 // Сохраняем файл в память для будущей отправки на "Сохранить"
@@ -685,7 +689,7 @@
             // ШАГ 2: Поочередная загрузка изображений
             if (imageTasks.length > 0) {
                 progressFill.style.width = '0%';
-                progressLabel.innerText = `Загрузка изображений (0/${imageTasks.length})`;
+                progressLabel.innerText = `Загружено (0/${imageTasks.length})`;
                 progressBar.classList.add('active');
 
                 const total = imageTasks.length;
@@ -715,15 +719,10 @@
                             throw new Error(res.message || `Ошибка загрузки файла ${i + 1}`);
                         }
 
-                        // Обновляем src картинки в DOM
-                        if (imgEl && res.relative_path) {
-                            imgEl.setAttribute('src', res.relative_path);
-                        }
-
                         // Обновляем индикатор загрузки
                         const pct = Math.round(((i + 1) / total) * 100);
                         progressFill.style.width = pct + '%';
-                        progressLabel.innerText = `Загрузка изображений (${i + 1}/${total})`;
+                        progressLabel.innerText = `Загружено (${i + 1}/${total})`;
 
                     } catch (err) {
                         alert(`Ошибка при загрузке изображения ${i + 1} из ${total}: ` + err.message);

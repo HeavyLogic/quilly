@@ -121,13 +121,12 @@ function resolveLocalImagePath(string $src, string $url, string $rootDir): ?stri
     return null;
 }
 
-// Конвертация картинок (png, jpg, jpeg) в WebP через Imagick или GD с полным логированием
-function convertImageToWebp(string $filePath, string $outputWebpPath, string $origExt = '', ?int $quality = null, ?int $maxWidth = null, ?int $maxHeight = null): bool {
-    @ini_set('memory_limit', '512M');
-
+// Конвертация картинок в WebP (включая миниатюры) через Imagick или GD с полным логированием
+function createWebpThumbnail(string $filePath, string $outputWebpPath, string $origExt = '', ?int $quality = null, ?int $targetWidth = null, ?int $maxHeight = null): bool {
     $quality = $quality ?? CMS_CONFIG['images']['quality'] ?? 80;
-    $maxWidth = $maxWidth ?? CMS_CONFIG['images']['max_width'] ?? 1920;
-    $maxHeight = $maxHeight ?? CMS_CONFIG['images']['max_height'] ?? 1920;
+    $maxWidth = $targetWidth ?? CMS_CONFIG['images']['max_width'] ?? 1920;
+    // Если передана точная ширина для миниатюры, снимаем ограничение по высоте (99999), чтобы пропорции не резались
+    $maxHeight = $maxHeight ?? ($targetWidth ? 99999 : (CMS_CONFIG['images']['max_height'] ?? 1920));
 
     $ext = strtolower($origExt) ?: strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
@@ -144,7 +143,7 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
         }
     }
 
-    writeDebugLog("Старт конвертации: '{$filePath}' (формат: {$ext}) -> '{$outputWebpPath}'");
+    writeDebugLog("Старт генерации WebP: '{$filePath}' (формат: {$ext}) -> '{$outputWebpPath}' (макс. ширина: {$maxWidth})");
 
     if (extension_loaded('imagick')) {
         try {
@@ -410,6 +409,8 @@ switch ($action) {
             responseError('Файл изображения не получен');
         }
 
+        $thumbSizes = [400, 600, 800, 1024, 1200];
+
         $rootDir = realpath(__DIR__ . '/../');
         $customFilePath = trim($_POST['filepath'] ?? '');
         $url = $_POST['url'] ?? '';
@@ -455,15 +456,37 @@ switch ($action) {
             $outputRelPath = $uploadSubDir . '/' . $finalFilename;
             $htmlSrc = '/' . $outputRelPath;
 
-            // Точечная конвертация в WebP БЕЗ фоллбэков
-            $converted = convertImageToWebp($tmpFile, $outputFullPath, $origExt);
+            // Увеличиваем таймаут и память на случай тяжелых исходников
+            @set_time_limit(120);
+            @ini_set('memory_limit', '512M');
 
-            if (!$converted or !file_exists($outputFullPath)) {
-                writeDebugLog("Ошибка: Конвертация файла '{$origFullName}' в WebP завершилась неудачей.");
+            // 1. Создаем промежуточный "Мастер-файл" в системном темпе (Качество 100, макс. 1920px)
+            $masterTmpPath = sys_get_temp_dir() . '/cms_master_' . md5(uniqid()) . '.webp';
+            $masterCreated = createWebpThumbnail($tmpFile, $masterTmpPath, $origExt, 100);
+
+            if (!$masterCreated || !file_exists($masterTmpPath)) {
+                writeDebugLog("Ошибка: Не удалось создать промежуточный мастер-файл из '{$origFullName}'.");
+                responseError('Не удалось обработать исходное изображение');
+            }
+    
+            // 2. Быстро создаем основной файл для uploads/ из Мастер-файла
+            $targetQuality = (int)(CMS_CONFIG['images']['quality'] ?? 80);
+
+            if ($targetQuality >= 100) {
+                // Если качество 100%, мастер-файл уже идеально подходит — просто копируем его!
+                $converted = @copy($masterTmpPath, $outputFullPath);
+            } else {
+                // Иначе сжимаем мастер-файл до нужного качества (например, 80%)
+                $converted = createWebpThumbnail($masterTmpPath, $outputFullPath, 'webp', $targetQuality);
+            }
+
+            if (!$converted || !file_exists($outputFullPath)) {
+                @unlink($masterTmpPath);
+                writeDebugLog("Ошибка: Конвертация мастер-файла '{$origFullName}' в целевой WebP завершилась неудачей.");
                 responseError('Не удалось сконвертировать изображение в WebP');
             }
 
-            // Проверка keep_if_larger: если WebP весит больше оригинала
+            // Проверка keep_if_larger: если финальный WebP весит больше исходного файла
             if (CMS_CONFIG['images']['keep_if_larger']) {
                 $origSize = filesize($tmpFile);
                 $webpSize = filesize($outputFullPath);
@@ -472,7 +495,6 @@ switch ($action) {
                     writeDebugLog("keep_if_larger: WebP ({$webpSize} байт) больше оригинала ({$origSize} байт). Отмена WebP.");
                     @unlink($outputFullPath);
     
-                    // Ещё раз ищим уникальное имя файла с оригинальным расширением
                     $candidateName = $cleanFilename;
                     while (file_exists($uploadsDir . '/' . $candidateName . '.' . $origExt)) {
                         $candidateName .= $chars[rand(0, strlen($chars) - 1)];
@@ -484,12 +506,39 @@ switch ($action) {
                     $htmlSrc = '/' . $outputRelPath;
     
                     if (!@move_uploaded_file($tmpFile, $outputFullPath)) {
+                        @unlink($masterTmpPath);
                         responseError('Не удалось сохранить файл изображения');
                     }
                 }
             }
 
-            // Здесь можно добавлять миниатюры
+            // 3. Быстрая генерация миниатюр ИЗ МАСТЕР-ФАЙЛА
+            $thumbsDir = $uploadsDir . '/thumbs';
+            if (!is_dir($thumbsDir)) {
+                @mkdir($thumbsDir, 0755, true);
+            }
+
+            // Размеры смотрим уже у легкого Мастер-файла
+            $masterInfo = @getimagesize($masterTmpPath);
+            $masterWidth = $masterInfo[0] ?? 0;
+
+            if ($masterWidth > 0) {
+                $baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
+
+                foreach ($thumbSizes as $w) {
+                    if ($masterWidth <= $w) {
+                        continue;
+                    }
+
+                    $thumbFullPath = $thumbsDir . '/' . $baseFilename . '-' . $w . '.webp';
+
+                    // Мгновенная нарезка из уже уменьшенного 1920px мастера
+                    createWebpThumbnail($masterTmpPath, $thumbFullPath, 'webp', $targetQuality, $w);
+                }
+            }
+
+            // 4. Удаляем временный Мастер-файл из системы
+            @unlink($masterTmpPath);
 
             // Обновляем HTML в DOM и удаляем старую картинку
             $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
@@ -499,16 +548,58 @@ switch ($action) {
                 $oldSrc = trim($imgElement->getAttribute('src') ?? '');
                 $oldLocalPath = resolveLocalImagePath($oldSrc, $url, $rootDir);
 
+                // 1. Проверяем реально созданные миниатюры и собираем srcset
+                $srcSetEntries = [];
+                $baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
+
+                foreach ($thumbSizes as $w) {
+                    $thumbRelPath = $uploadSubDir . '/thumbs/' . $baseFilename . '-' . $w . '.webp';
+                    $thumbAbsPath = $rootDir . '/' . $thumbRelPath;
+
+                    if (file_exists($thumbAbsPath)) {
+                        $srcSetEntries[] = '/' . ltrim($thumbRelPath, '/') . " {$w}w";
+                    }
+                }
+
+                // 2. Добавляем основное (загруженное) изображение в srcset как максимальную версию
+                $mainImgInfo = @getimagesize($outputFullPath);
+                if ($mainImgInfo && !empty($mainImgInfo[0])) {
+                    $mainWidth = $mainImgInfo[0];
+                    $srcSetEntries[] = $htmlSrc . " {$mainWidth}w";
+                }
+
+                // 3. Обновляем атрибуты тега <img>
                 $imgElement->setAttribute('src', $htmlSrc);
 
-                // Если старая локальная картинка существовала — удаляем её
-                if ($oldLocalPath) {
+                if (!empty($srcSetEntries)) {
+                    $imgElement->setAttribute('srcset', implode(', ', $srcSetEntries));
+                    $imgElement->setAttribute('sizes', 'auto');
+                }
+
+                $imgElement->setAttribute('loading', 'lazy');
+
+                // 4. Если старая локальная картинка существовала — удаляем её и её миниатюры
+                if ($oldLocalPath && $oldLocalPath !== $outputFullPath) {
                     @unlink($oldLocalPath);
                     writeDebugLog("Удалена заменённая старая картинка: '{$oldLocalPath}'");
+
+                    $oldDir = dirname($oldLocalPath);
+                    $oldBaseName = pathinfo($oldLocalPath, PATHINFO_FILENAME);
+
+                    foreach ($thumbSizes as $w) {
+                        $oldThumbPath = $oldDir . '/thumbs/' . $oldBaseName . '-' . $w . '.webp';
+                        if (file_exists($oldThumbPath)) {
+                            @unlink($oldThumbPath);
+                        }
+                    }
                 }
 
                 $doc->saveHtmlFile($fullPath);
-                responseSuccess(['relative_path' => $htmlSrc]);
+                
+                responseSuccess([
+                    'relative_path' => $htmlSrc,
+                    'srcset'        => implode(', ', $srcSetEntries)
+                ]);
             } else {
                 responseError('Элемент #' . $targetId . ' не найден в HTML');
             }
@@ -517,7 +608,6 @@ switch ($action) {
             writeDebugLog("PHP Exception при upload_single_image: " . $e->getMessage());
             responseError('Ошибка загрузки: ' . $e->getMessage());
         }
-
     // 4. Сохранение текстовых изменений в HTML + Создание 1 РЕВИЗИИ
     case 'save_page':
         $user = getAuthUser(CMS_CONFIG['db_path']);

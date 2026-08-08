@@ -64,6 +64,7 @@ body.cms-edit-mode:has(.editable.cms-active-target) #cms-toolbar {
 }
 
 /* Принудительно скрываем тулбар во время AJAX-загрузки */
+body.cms-edit-mode:has(#cms-progress-bar.active) #cms-toolbar,
 body.cms-ajax-loading #cms-toolbar {
     opacity: 0 !important;
     pointer-events: none !important;
