@@ -25,6 +25,7 @@ define('CMS_CONFIG', [
     // Настройки обработки и конвертации изображений
     'images' => [
         'quality'    => 80,
+        'keep_if_larger' => true,
         'max_width'  => 1920,
         'max_height' => 1920,
         'upload_dir' => trim('uploads', '/\\'), // Папка относительно корня сайта

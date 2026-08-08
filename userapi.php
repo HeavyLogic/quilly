@@ -129,10 +129,7 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
     $maxWidth = $maxWidth ?? CMS_CONFIG['images']['max_width'] ?? 1920;
     $maxHeight = $maxHeight ?? CMS_CONFIG['images']['max_height'] ?? 1920;
 
-    $ext = strtolower($origExt);
-    if (!$ext || $ext === 'tmp') {
-        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-    }
+    $ext = strtolower($origExt) ?: strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
     if (!$ext || $ext === 'tmp') {
         $imgInfo = @getimagesize($filePath);
@@ -147,13 +144,9 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
         }
     }
 
-    $origSize = file_exists($filePath) ? filesize($filePath) : 0;
-    writeDebugLog("Старт конвертации: '{$filePath}' (определён формат: {$ext}, размер: {$origSize} байт) -> '{$outputWebpPath}'");
-
-    $converted = false;
+    writeDebugLog("Старт конвертации: '{$filePath}' (формат: {$ext}) -> '{$outputWebpPath}'");
 
     if (extension_loaded('imagick')) {
-        writeDebugLog("Попытка обработки через расширение Imagick");
         try {
             $image = new Imagick($filePath);
             $origWidth = $image->getImageWidth();
@@ -162,10 +155,7 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
             // Пропорциональный ресайз
             if ($origWidth > $maxWidth || $origHeight > $maxHeight) {
                 $ratio = min($maxWidth / $origWidth, $maxHeight / $origHeight);
-                $newWidth = (int)($origWidth * $ratio);
-                $newHeight = (int)($origHeight * $ratio);
-                $image->resizeImage($newWidth, $newHeight, Imagick::FILTER_LANCZOS, 1);
-                writeDebugLog("Imagick ресайз с {$origWidth}x{$origHeight} до {$newWidth}x{$newHeight}");
+                $image->resizeImage((int)($origWidth * $ratio), (int)($origHeight * $ratio), Imagick::FILTER_LANCZOS, 1);
             }
 
             $image->setImageFormat('webp');
@@ -173,18 +163,13 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
             $converted = $image->writeImage($outputWebpPath);
             $image->destroy();
 
-            writeDebugLog("Результат записи Imagick writeImage: " . ($converted ? "УСПЕШНО" : "ОШИБКА"));
+            return $converted && file_exists($outputWebpPath) && filesize($outputWebpPath) > 0;
         } catch (Throwable $e) {
             writeDebugLog("Imagick Exception: " . $e->getMessage());
-            $converted = false;
-        }
-    } elseif (extension_loaded('gd')) {
-        writeDebugLog("Попытка обработки через расширение GD");
-
-        if (!function_exists('imagewebp')) {
-            writeDebugLog("Ошибка GD: функция imagewebp() отсутствует в текущей сборке PHP GD");
             return false;
         }
+    } elseif (extension_loaded('gd')) {
+        if (!function_exists('imagewebp')) return false;
 
         $image = null;
         if ($ext === 'jpg' || $ext === 'jpeg') {
@@ -198,10 +183,7 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
             $image = @imagecreatefromwebp($filePath);
         }
 
-        if (!$image) {
-            writeDebugLog("Ошибка GD: Не удалось создать ресурс изображения из файла '{$filePath}' (формат: {$ext})");
-            return false;
-        }
+        if (!$image) return false;
 
         $origWidth = imagesx($image);
         $origHeight = imagesy($image);
@@ -220,38 +202,14 @@ function convertImageToWebp(string $filePath, string $outputWebpPath, string $or
             imagecopyresampled($resizedImage, $image, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
             imagedestroy($image);
             $image = $resizedImage;
-            writeDebugLog("GD ресайз с {$origWidth}x{$origHeight} до {$newWidth}x{$newHeight}");
         }
 
         $converted = @imagewebp($image, $outputWebpPath, $quality);
         imagedestroy($image);
-        writeDebugLog("Результат записи GD imagewebp: " . ($converted ? "УСПЕШНО" : "ОШИБКА"));
-    } else {
-        writeDebugLog("Ошибка: Ни Imagick, ни GD расширения не загружены на сервере");
-        return false;
+
+        return $converted && file_exists($outputWebpPath) && filesize($outputWebpPath) > 0;
     }
 
-    if ($converted && file_exists($outputWebpPath)) {
-        $webpSize = filesize($outputWebpPath);
-
-        if ($webpSize === 0) {
-            writeDebugLog("Ошибка: Созданный файл WebP имеет размер 0 байт. Удаление файла.");
-            @unlink($outputWebpPath);
-            return false;
-        }
-
-        // Проверка keep_if_larger
-        if ($webpSize > $origSize) {
-            writeDebugLog("Условие keep_if_larger: Сконвертированный WebP ({$webpSize} байт) ВЕСИТ БОЛЬШЕ оригинала ({$origSize} байт). Отмена конвертации, возвращаем оригинал.");
-            @unlink($outputWebpPath);
-            return false;
-        }
-
-        writeDebugLog("Конвертация успешно завершена! Файл saved: '{$outputWebpPath}' (WebP: {$webpSize} байт vs Оригинал: {$origSize} байт)");
-        return true;
-    }
-
-    writeDebugLog("Ошибка: Файл WebP '{$outputWebpPath}' не существует на диске после конвертации");
     return false;
 }
 
@@ -467,6 +425,9 @@ switch ($action) {
         }
 
         try {
+            // Создаем ZIP-ревизию (если еще не создана)
+            makeRevision($fullPath, $targetRelPath, $rootDir, $url);
+
             $uploadSubDir = CMS_CONFIG['images']['upload_dir'];
             $uploadsDir = $rootDir . '/' . $uploadSubDir;
             if (!is_dir($uploadsDir)) {
@@ -482,8 +443,6 @@ switch ($action) {
             $cleanFilename = preg_replace('/[^\p{L}\p{N}_\-]/u', '_', $origName);
             $cleanFilename = trim(preg_replace('/_+/', '_', $cleanFilename), '_') ?: 'img';
 
-            writeDebugLog("upload_single_image: Обработка '{$origFullName}' для элемента '#{$targetId}'");
-
             $chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
             $format = 'webp';
             $candidateName = $cleanFilename;
@@ -496,21 +455,43 @@ switch ($action) {
             $outputRelPath = $uploadSubDir . '/' . $finalFilename;
             $htmlSrc = '/' . $outputRelPath;
 
+            // Точечная конвертация в WebP БЕЗ фоллбэков
             $converted = convertImageToWebp($tmpFile, $outputFullPath, $origExt);
 
-            if (!$converted) {
-                $candidateName = $cleanFilename;
-                while (file_exists($uploadsDir . '/' . $candidateName . '.' . $origExt)) {
-                    $candidateName .= $chars[rand(0, strlen($chars) - 1)];
-                }
-                $finalFilename = $candidateName . '.' . $origExt;
-                $outputFullPath = $uploadsDir . '/' . $finalFilename;
-                $outputRelPath = $uploadSubDir . '/' . $finalFilename;
-                $htmlSrc = '/' . $outputRelPath;
-                @move_uploaded_file($tmpFile, $outputFullPath);
+            if (!$converted or !file_exists($outputFullPath)) {
+                writeDebugLog("Ошибка: Конвертация файла '{$origFullName}' в WebP завершилась неудачей.");
+                responseError('Не удалось сконвертировать изображение в WebP');
             }
 
-            // Мгновенно обновляем HTML-файл на диске для этого конкретного изображения
+            // Проверка keep_if_larger: если WebP весит больше оригинала
+            if (CMS_CONFIG['images']['keep_if_larger']) {
+                $origSize = filesize($tmpFile);
+                $webpSize = filesize($outputFullPath);
+    
+                if ($webpSize > $origSize) {
+                    writeDebugLog("keep_if_larger: WebP ({$webpSize} байт) больше оригинала ({$origSize} байт). Отмена WebP.");
+                    @unlink($outputFullPath);
+    
+                    // Ещё раз ищим уникальное имя файла с оригинальным расширением
+                    $candidateName = $cleanFilename;
+                    while (file_exists($uploadsDir . '/' . $candidateName . '.' . $origExt)) {
+                        $candidateName .= $chars[rand(0, strlen($chars) - 1)];
+                    }
+    
+                    $finalFilename = $candidateName . '.' . $origExt;
+                    $outputFullPath = $uploadsDir . '/' . $finalFilename;
+                    $outputRelPath = $uploadSubDir . '/' . $finalFilename;
+                    $htmlSrc = '/' . $outputRelPath;
+    
+                    if (!@move_uploaded_file($tmpFile, $outputFullPath)) {
+                        responseError('Не удалось сохранить файл изображения');
+                    }
+                }
+            }
+
+            // Здесь можно добавлять миниатюры
+
+            // Обновляем HTML в DOM и удаляем старую картинку
             $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
             $imgElement = $doc->getElementById($targetId);
 
@@ -520,11 +501,10 @@ switch ($action) {
 
                 $imgElement->setAttribute('src', $htmlSrc);
 
-                // Если старая локальная картинка отличалась — удаляем её
-                if ($oldLocalPath && realpath($oldLocalPath) !== realpath($outputFullPath)) {
-                    if (@unlink($oldLocalPath)) {
-                        writeDebugLog("Удалена старая заменённая картинка: '{$oldLocalPath}'");
-                    }
+                // Если старая локальная картинка существовала — удаляем её
+                if ($oldLocalPath) {
+                    @unlink($oldLocalPath);
+                    writeDebugLog("Удалена заменённая старая картинка: '{$oldLocalPath}'");
                 }
 
                 $doc->saveHtmlFile($fullPath);
