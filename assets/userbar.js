@@ -632,7 +632,7 @@
             }
         });
 
-        // Нажатие кнопки "Сохранить" (3-Этапное оптимизированное сохранение)
+        // Нажатие кнопки "Сохранить"
         btnSave.addEventListener('click', async () => {
             if (editedElements.size === 0) return;
 
@@ -657,7 +657,7 @@
                 }
             });
 
-            // ШАГ 1: Первичное сохранение текста + СОЗДАНИЕ 1 РЕВИЗИИ (всегда запускается первым)
+            // ШАГ 1: Сохранение текстов + СОЗДАНИЕ 1 РЕВИЗИИ (всегда первым)
             const formData = new FormData();
             formData.append('filepath', getCustomFilePath());
             formData.append('url', window.location.href);
@@ -681,9 +681,7 @@
                 return;
             }
 
-            // ШАГ 2: Поочередная загрузка изображений в /uploads/ БЕЗ создания ревизий и перезаписи HTML 40 раз
-            const imageUpdates = {};
-
+            // ШАГ 2: Поочередная загрузка изображений с МГНОВЕННОЙ записью в HTML каждого файла
             if (imageTasks.length > 0) {
                 progressFill.style.width = '0%';
                 progressLabel.innerText = `Загрузка изображений (0/${imageTasks.length})`;
@@ -716,10 +714,7 @@
                             throw new Error(res.message || `Ошибка загрузки файла ${i + 1}`);
                         }
 
-                        // Сохраняем полученный новый путь к WebP файлу
-                        imageUpdates[task.id] = res.relative_path;
-
-                        // Обновляем визуальный src у картинки прямо в браузере
+                        // Обновляем src картинки в DOM
                         if (imgEl && res.relative_path) {
                             imgEl.setAttribute('src', res.relative_path);
                         }
@@ -739,35 +734,9 @@
                 }
 
                 progressBar.classList.remove('active');
-
-                // ШАГ 3: Финальное ОДНОКРАТНОЕ обновление HTML файла со всеми новыми путями к картинкам
-                if (Object.keys(imageUpdates).length > 0) {
-                    const finalFormData = new FormData();
-                    finalFormData.append('filepath', getCustomFilePath());
-                    finalFormData.append('url', window.location.href);
-                    finalFormData.append('image_updates', JSON.stringify(imageUpdates));
-
-                    try {
-                        const r = await fetch('/admin/userapi.php?action=finalize_images', {
-                            method: 'POST',
-                            credentials: 'same-origin',
-                            body: finalFormData
-                        });
-                        const text = await r.text();
-                        const res = JSON.parse(text);
-                        if (!res || !res.success) {
-                            throw new Error(res.message || 'Ошибка обновления путей картинок в HTML');
-                        }
-                    } catch (err) {
-                        alert('Ошибка финализации изображений: ' + err.message);
-                        document.body.classList.remove('cms-ajax-loading');
-                        btnSave.removeAttribute('disabled');
-                        return;
-                    }
-                }
             }
 
-            // ШАГ 4: Мягкое финализирование состояния на клиенте БЕЗ перезагрузки страницы
+            // ШАГ 3: Мягкое финализирование состояния на клиенте БЕЗ перезагрузки страницы
             document.body.classList.remove('cms-ajax-loading');
             editedElements.clear();
             stagedImageFiles.clear();
