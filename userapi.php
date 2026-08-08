@@ -401,7 +401,6 @@ switch ($action) {
         responseSuccess();
 
     // 3. Загрузка ровно ОДНОГО изображения (Мгновенная запись в HTML каждого файла)
-    // 3. Загрузка ровно ОДНОГО изображения (Мгновенная запись в HTML каждого файла)
     case 'upload_single_image':
         $user = getAuthUser(CMS_CONFIG['db_path']);
         if (!$user) responseError('Доступ запрещен');
@@ -414,7 +413,7 @@ switch ($action) {
             responseError('Файл изображения не получен');
         }
 
-        $thumbSizes = [600, 1200];
+        $thumbSizes = CMS_CONFIG['images']['thumb_sizes'] ?? [600, 1200];
         $allowedExts = ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'svg', 'webp', 'avif'];
         $alwaysCreateThumbs = false; // Флаг: создавать ли файлы на диске, если они не подходят под data-width/data-height
 
@@ -557,7 +556,6 @@ switch ($action) {
 
                         $calculatedH = (int)round($w * $aspectRatio);
 
-                        // Если ФЛАГ ВЫКЛЮЧЕН — НЕ создаем файл физически на диске, если он не подходит по размеру!
                         if (!$alwaysCreateThumbs) {
                             if ($minReqW > 0 && $w < $minReqW) continue;
                             if ($minReqH > 0 && $calculatedH < $minReqH) continue;
@@ -576,12 +574,33 @@ switch ($action) {
             $imgElement = $doc->getElementById($targetId);
 
             if ($imgElement) {
+                // 1. Извлекаем старые пути ДО изменения атрибутов для последующего точечного удаления
                 $oldSrc = trim($imgElement->getAttribute('src') ?? '');
-                $oldLocalPath = resolveLocalImagePath($oldSrc, $url, $rootDir);
+                $oldSrcSet = trim($imgElement->getAttribute('srcset') ?? '');
+                $oldFilesToDelete = [];
 
+                if ($oldSrc) {
+                    $p = resolveLocalImagePath($oldSrc, $url, $rootDir);
+                    if ($p) $oldFilesToDelete[] = $p;
+                }
+
+                if ($oldSrcSet) {
+                    $srcSetEntries = explode(',', $oldSrcSet);
+                    foreach ($srcSetEntries as $entry) {
+                        $parts = preg_split('/\s+/', trim($entry));
+                        if (!empty($parts[0])) {
+                            $p = resolveLocalImagePath($parts[0], $url, $rootDir);
+                            if ($p) $oldFilesToDelete[] = $p;
+                        }
+                    }
+                }
+                $oldFilesToDelete = array_unique($oldFilesToDelete);
+
+                // 2. Устанавливаем новый src
                 $imgElement->setAttribute('src', $htmlSrc);
 
-                // Собираем srcset ТОЛЬКО если это не SVG/GIF
+                // 3. Собираем новый srcset ТОЛЬКО если это не SVG/GIF
+                $newSrcSetEntries = [];
                 if (!$isPassthrough) {
                     $parseDim = function(?string $val): int {
                         if ($val === null) return 0;
@@ -606,18 +625,18 @@ switch ($action) {
                             if ($minReqW > 0 && $w < $minReqW) continue;
                             if ($minReqH > 0 && $calculatedH < $minReqH) continue;
 
-                            $srcSetEntries[] = '/' . ltrim($thumbRelPath, '/') . " {$w}w";
+                            $newSrcSetEntries[] = '/' . ltrim($thumbRelPath, '/') . " {$w}w";
                         }
                     }
 
                     $mainImgInfo = @getimagesize($outputFullPath);
                     if ($mainImgInfo && !empty($mainImgInfo[0])) {
                         $mainWidth = $mainImgInfo[0];
-                        $srcSetEntries[] = $htmlSrc . " {$mainWidth}w";
+                        $newSrcSetEntries[] = $htmlSrc . " {$mainWidth}w";
                     }
 
-                    if (!empty($srcSetEntries)) {
-                        $imgElement->setAttribute('srcset', implode(', ', $srcSetEntries));
+                    if (!empty($newSrcSetEntries)) {
+                        $imgElement->setAttribute('srcset', implode(', ', $newSrcSetEntries));
                         $imgElement->setAttribute('sizes', 'auto');
                     }
                     $imgElement->setAttribute('loading', 'lazy');
@@ -627,19 +646,11 @@ switch ($action) {
                     $imgElement->removeAttribute('sizes');
                 }
 
-                // Удаление старой локальной картинки
-                if ($oldLocalPath && $oldLocalPath !== $outputFullPath) {
-                    @unlink($oldLocalPath);
-                    writeDebugLog("Удалена заменённая старая картинка: '{$oldLocalPath}'");
-
-                    $oldDir = dirname($oldLocalPath);
-                    $oldBaseName = pathinfo($oldLocalPath, PATHINFO_FILENAME);
-
-                    foreach ($thumbSizes as $w) {
-                        $oldThumbPath = $oldDir . '/thumbs/' . $oldBaseName . '-' . $w . '.webp';
-                        if (file_exists($oldThumbPath)) {
-                            @unlink($oldThumbPath);
-                        }
+                // 4. Безопасное удаление старых файлов (удаляем строго то, что было прописано в теге до загрузки)
+                foreach ($oldFilesToDelete as $oldFilePath) {
+                    if ($oldFilePath && $oldFilePath !== $outputFullPath && file_exists($oldFilePath)) {
+                        @unlink($oldFilePath);
+                        writeDebugLog("Удален старый заменённый файл из src/srcset: '{$oldFilePath}'");
                     }
                 }
 
@@ -647,7 +658,7 @@ switch ($action) {
                 
                 responseSuccess([
                     'relative_path' => $htmlSrc,
-                    'srcset'        => implode(', ', $srcSetEntries)
+                    'srcset'        => implode(', ', $newSrcSetEntries)
                 ]);
             } else {
                 responseError('Элемент #' . $targetId . ' не найден в HTML');

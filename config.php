@@ -28,6 +28,7 @@ define('CMS_CONFIG', [
         'keep_if_larger' => true,
         'max_width'  => 1920,
         'max_height' => 1920,
+        'thumb_sizes'    => [600, 1200],
         'upload_dir' => trim('uploads', '/\\'), // Папка относительно корня сайта
     ],
 ]);
