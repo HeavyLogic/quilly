@@ -131,9 +131,9 @@
 
         // Формируем блок загрузки картинки (или вывод ошибки, если нет Imagick/GD)
         const imageGroupHtml = data.img_library_valid
-            ? `<input type="file" id="cms-img-input" class="cms-tb-file" accept="image/*">`
-            : `<span style="color: #ff4d4f; font-size: 11px; font-weight: 600;">Ошибка: Требуется расширение Imagick или GD</span>`;
-
+        ? `<input type="file" id="cms-img-input" class="cms-tb-file" accept=".jpg,.jpeg,.png,.bmp,.gif,.svg,.webp,.avif,image/jpeg,image/png,image/bmp,image/gif,image/svg+xml,image/webp,image/avif">`
+        : `<span style="color: #ff4d4f; font-size: 11px; font-weight: 600;">Ошибка: Требуется расширение Imagick или GD</span>`;
+        
         // Прозрачный родительский контейнер для юзербара и его выплывающих блоков
         const userbarContainer = document.createElement('div');
         userbarContainer.id = 'cms-userbar-container';
