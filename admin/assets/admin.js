@@ -2,7 +2,18 @@ import { sendAjax } from './common.js';
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    // Вспомогательная функция вывода ошибок
+    const errorAlert = document.getElementById('errorAlert');
+    const modalErrorAlert = document.getElementById('modalErrorAlert');
+
+    function updateUsersList(html) {
+        const usersList = document.getElementById('usersList');
+        if (!usersList) {
+            return;
+        }
+
+        usersList.innerHTML = html || '';
+    }
+
     const showError = (element, message) => {
         if (!element) return;
         element.textContent = message;
@@ -21,11 +32,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (setupForm) {
         setupForm.addEventListener('submit', (e) => {
             e.preventDefault();
+            hideError(errorAlert);
+
             const pass = setupForm.querySelector('[name="password"]').value;
             const passConfirm = setupForm.querySelector('[name="password_confirm"]').value;
 
             if (pass !== passConfirm) {
-                showError(document.getElementById('errorAlert'), 'Пароли не совпадают');
+                showError(errorAlert, 'Пароли не совпадают');
                 return;
             }
 
@@ -45,6 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginForm) {
         loginForm.addEventListener('submit', (e) => {
             e.preventDefault();
+            hideError(errorAlert);
+
             sendAjax('index.php', {
                 action: 'login',
                 login: loginForm.querySelector('[name="login"]').value,
@@ -59,15 +74,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnLogout = document.getElementById('btnLogout');
     if (btnLogout) {
         btnLogout.addEventListener('click', () => {
-            sendAjax('index.php', { action: 'logout' }, () => {
-                location.reload();
-            });
+            sendAjax('index.php', { action: 'logout' }, () => location.reload());
         });
     }
 
-    // 4. Управление модальным окном
+    // 4. Модальное окно
     const addModal = document.getElementById('addModal');
-    const modalErrorAlert = document.getElementById('modalErrorAlert');
     const addUserForm = document.getElementById('addUserForm');
     const btnOpenAddModal = document.getElementById('btnOpenAddModal');
     const btnCloseModal = document.getElementById('btnCloseModal');
@@ -85,10 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (btnCloseModal) {
-        btnCloseModal.addEventListener('click', closeModal);
-    }
-
+    if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
     if (addModal) {
         addModal.addEventListener('click', (e) => {
             if (e.target === addModal) closeModal();
@@ -105,26 +114,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 user: addUserForm.querySelector('[name="user"]').value,
                 password: addUserForm.querySelector('[name="password"]').value,
                 role: addUserForm.querySelector('[name="role"]').value
-            }, () => {
+            }, (result) => {
                 closeModal();
-            }, (errorMsg) => {
-                showError(modalErrorAlert, errorMsg);
+                updateUsersList(result.html);
             });
         });
     }
 
-    // 5. Делегирование событий для таблицы пользователей (Удаление)
+    // 5. Удаление пользователя
     document.addEventListener('click', (e) => {
         const deleteBtn = e.target.closest('.btn-delete');
         if (deleteBtn) {
             const userRow = deleteBtn.closest('.user-row');
             if (userRow && confirm('Удалить пользователя?')) {
-                sendAjax('index.php', { action: 'delete_user', id: userRow.dataset.id });
+                sendAjax('index.php', {
+                    action: 'delete_user',
+                    id: userRow.dataset.id
+                }, (result) => {
+                    updateUsersList(result.html);
+                });
             }
         }
     });
 
-    // 6. Делегирование событий (Inline Editing по двойному клику)
+    // 6. Редактирование ячеек
     document.addEventListener('dblclick', (e) => {
         const cell = e.target.closest('.editable');
         if (!cell || cell.querySelector('input, select')) return;
@@ -138,18 +151,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (field === 'role') {
             const select = document.createElement('select');
-            
-            const optEditor = document.createElement('option');
-            optEditor.value = 'editor';
-            optEditor.textContent = 'editor';
-            select.appendChild(optEditor);
-
-            const optAdmin = document.createElement('option');
-            optAdmin.value = 'admin';
-            optAdmin.textContent = 'admin';
-            select.appendChild(optAdmin);
-
+            select.innerHTML = '<option value="editor">editor</option><option value="admin">admin</option>';
             select.value = currentVal || 'editor';
+
             cell.innerHTML = '';
             cell.appendChild(select);
             select.focus();
@@ -158,13 +162,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const saveRole = () => {
                 if (isSaved) return;
                 isSaved = true;
+
                 sendAjax('index.php', {
                     action: 'update_field',
                     id: id,
                     field: field,
                     value: select.value
-                }, (res) => {
-                    document.getElementById('usersList').innerHTML = res.html;
+                }, (result) => {
+                    updateUsersList(result.html);
                 });
             };
 
@@ -196,14 +201,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     id: id,
                     field: field,
                     value: newVal
-                }, (res) => {
-                    document.getElementById('usersList').innerHTML = res.html;
+                }, (result) => {
+                    updateUsersList(result.html);
                 });
             };
 
             input.addEventListener('blur', save);
-            input.addEventListener('keydown', (evt) => {
-                if (evt.key === 'Enter') {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
                     input.removeEventListener('blur', save);
                     save();
                 }

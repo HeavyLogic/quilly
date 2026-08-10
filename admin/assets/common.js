@@ -1,8 +1,6 @@
-// /admin/assets/common.js
-
 let ajaxing = false;
 
-export async function sendAjax(url, data, successFunc, errorFunc) {
+export async function sendAjax(url, data, successFunc, failFunc) {
     if (!data || !data.action || ajaxing) return;
     ajaxing = true;
 
@@ -18,29 +16,39 @@ export async function sendAjax(url, data, successFunc, errorFunc) {
             body: params
         });
 
-        if (!response.ok) {
-            throw new Error(`Ошибка сервера: ${response.status}`);
+        const rawText = await response.text();
+        let res = null;
+
+        try {
+            res = JSON.parse(rawText);
+        } catch (e) {
+            res = null;
         }
 
-        const res = await response.json();
+        // 1. Системная ошибка (PHP упал, 500/403 или вернул не JSON)
+        if (!response.ok || !res) {
+            failFunc(res || rawText);
 
-        if (res && res.success) {
-            if (typeof successFunc === 'function') successFunc(res);
-        } else {
-            const msg = (res && res.message) ? res.message : 'Ошибка выполнения';
-            if (typeof errorFunc === 'function') {
-                errorFunc(msg);
-            } else {
-                alert(msg);
-            }
+            const errorText = (res && res.message) 
+                ? res.message 
+                : (rawText ? rawText.trim() : 'Unknown error');
+
+            alert((response.status || 0) + ': ' + errorText);
+            return;
         }
+
+        // 2. Логика PHP (success: true / false)
+        if (res.success !== true) {
+            failFunc(res);
+            return;
+        }
+
+        successFunc(res);
+
     } catch (err) {
-        const msg = err.message || 'Ошибка соединения';
-        if (typeof errorFunc === 'function') {
-            errorFunc(msg);
-        } else {
-            alert(msg);
-        }
+        failFunc(err);
+
+        alert('0: ' + (err.message || 'Network error'));
     } finally {
         ajaxing = false;
     }
