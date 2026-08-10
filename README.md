@@ -9,7 +9,7 @@ It's a simple HTML content editor, based on your browser's native `contenteditab
 * **Simple inline editing** — There are a lot of flat-file CMS systems out there, but only a couple offers full page inline editing. And they are already overengenered for simple static sites. Not the way I like it.
 * **No DB, no MD, no {{templates}}** — Where do you store data after editing? Astro-based static editors are very popular, but it looks like this: there's your HTML-files, and there's your markdown-files with data. And then you have to compile your HTML, or you have to hook your Astro CMS with repo on Github and setup CI/CD. I got rid of all extra steps and layers. Your data is stored directly in your HTML and your changes are available immediately. Static means static.
 * **Powered by PHP 8.4** — in PHP 8.4 the legacy **libxml2** parser was replaced with **Lexbor** — a modern, spec-compliant C library that parses according to the HTML5 living standard. Another reason why I chose PHP over some JS stack - easier to deploy. You can upload this on any cheap hosting and you're done.
-* **0 dependencies** — I keep the implementation simple, there's no heavy JS bundles, only PHP and Vanilla JS. So it won't interfere with the site's CSS or JS. And there was no need to invent overengineered encapsulating system with iframe for editor.
+* **0 dependencies** — I keep the implementation simple, there's no heavy JS bundles, only PHP and Vanilla JS. So it won't interfere with the site's CSS or JS.
 * **K.I.S.S.** — The most important thing, that I tried to achieve here: UI for editing should be simple and intuitive for client (editor). But I also tried my best to make it easier for maintainers (myself included). I designed it around the idea that less steps = better.
 
 
