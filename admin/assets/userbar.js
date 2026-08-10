@@ -1,3 +1,5 @@
+import { sendAjax } from './common.js';
+
 (() => {
     const editedElements = new Set();
     const stagedImageFiles = new Map(); // Хранилище файлов до клика "Сохранить"
@@ -69,14 +71,12 @@
 
     // Запрос свежего списка ревизий с сервера
     const refreshRevisionsList = () => {
-        const customPath = getCustomFilePath();
-        fetch(`/admin/userapi.php?action=init_bar&filepath=${encodeURIComponent(customPath)}&url=${encodeURIComponent(window.location.href)}`, {
-            method: 'GET',
-            credentials: 'same-origin'
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data && data.success && data.revisions) {
+        sendAjax('/admin/userapi.php', {
+            action: 'init_bar',
+            filepath: getCustomFilePath(),
+            url: window.location.href
+        }, (data) => {
+            if (data.revisions) {
                 updateRevisionsUI(data.revisions);
             }
         });
@@ -96,29 +96,16 @@
         }
     }, true);
 
+    // Инициализация юзербара при загрузке страницы
     document.addEventListener('DOMContentLoaded', () => {
-        const customPath = getCustomFilePath();
-        
-        fetch(`/admin/userapi.php?action=init_bar&filepath=${encodeURIComponent(customPath)}&url=${encodeURIComponent(window.location.href)}`, {
-            method: 'GET',
-            credentials: 'same-origin'
-        })
-        .then(async r => {
-            const text = await r.text();
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                console.error('CMS Init Auth Error Response:', text);
-                throw new Error('Ошибка авторизации сервера: ' + text.substring(0, 150));
-            }
-        })
-        .then(data => {
-            if (data && data.success && data.authorized) {
+        sendAjax('/admin/userapi.php', {
+            action: 'init_bar',
+            filepath: getCustomFilePath(),
+            url: window.location.href
+        }, (data) => {
+            if (data.authorized) {
                 renderUserbar(data);
             }
-        })
-        .catch(err => {
-            console.error('CMS Auth Error:', err);
         });
     });
 
@@ -131,8 +118,8 @@
 
         // Формируем блок загрузки картинки (или вывод ошибки, если нет Imagick/GD)
         const imageGroupHtml = data.img_library_valid
-        ? `<input type="file" id="cms-img-input" class="cms-tb-file" accept=".jpg,.jpeg,.png,.bmp,.gif,.svg,.webp,.avif,image/jpeg,image/png,image/bmp,image/gif,image/svg+xml,image/webp,image/avif">`
-        : `<span style="color: #ff4d4f; font-size: 11px; font-weight: 600;">Ошибка: Требуется расширение Imagick или GD</span>`;
+            ? `<input type="file" id="cms-img-input" class="cms-tb-file" accept=".jpg,.jpeg,.png,.bmp,.gif,.svg,.webp,.avif,image/jpeg,image/png,image/bmp,image/gif,image/svg+xml,image/webp,image/avif">`
+            : `<span style="color: #ff4d4f; font-size: 11px; font-weight: 600;">Ошибка: Требуется расширение Imagick или GD</span>`;
         
         // Прозрачный родительский контейнер для юзербара и его выплывающих блоков
         const userbarContainer = document.createElement('div');
@@ -164,33 +151,16 @@
         }
 
         userbarContainer.innerHTML = `
-            <!-- 1.1 Выплывающий тулбар форматирования (стартовая прозрачность задана инлайн) -->
             <div id="cms-toolbar" class="cms-glass-card" data-mode="text" style="opacity: 0; pointer-events: none;">
                 <div class="cms-tb-group" data-group="text">
-                    <button class="cms-tb-btn" data-cmd="bold" title="Жирный">
-                        <span class="tabler-icon tabler--bold"></span>
-                    </button>
-                    <button class="cms-tb-btn" data-cmd="italic" title="Курсив">
-                        <span class="tabler-icon tabler--italic"></span>
-                    </button>
-                    <button class="cms-tb-btn" data-cmd="underline" title="Подчеркнутый">
-                        <span class="tabler-icon tabler--underline"></span>
-                    </button>
-                    <button class="cms-tb-btn" data-cmd="strikeThrough" title="Зачеркнутый">
-                        <span class="tabler-icon tabler--strikethrough"></span>
-                    </button>
-                    
+                    <button class="cms-tb-btn" data-cmd="bold" title="Жирный"><span class="tabler-icon tabler--bold"></span></button>
+                    <button class="cms-tb-btn" data-cmd="italic" title="Курсив"><span class="tabler-icon tabler--italic"></span></button>
+                    <button class="cms-tb-btn" data-cmd="underline" title="Подчеркнутый"><span class="tabler-icon tabler--underline"></span></button>
+                    <button class="cms-tb-btn" data-cmd="strikeThrough" title="Зачеркнутый"><span class="tabler-icon tabler--strikethrough"></span></button>
                     <div class="cms-tb-divider"></div>
-                    
-                    <button class="cms-tb-btn" data-cmd="createLink" title="Ссылка">
-                        <span class="tabler-icon tabler--link"></span>
-                    </button>
-                    <button class="cms-tb-btn" data-cmd="span" title="Span">
-                        <span class="cms-tb-text">span</span>
-                    </button>
-                    <button class="cms-tb-btn" data-cmd="removeFormat" title="Очистить форматирование">
-                        <span class="tabler-icon tabler--clear-formatting"></span>
-                    </button>
+                    <button class="cms-tb-btn" data-cmd="createLink" title="Ссылка"><span class="tabler-icon tabler--link"></span></button>
+                    <button class="cms-tb-btn" data-cmd="span" title="Span"><span class="cms-tb-text">span</span></button>
+                    <button class="cms-tb-btn" data-cmd="removeFormat" title="Очистить форматирование"><span class="tabler-icon tabler--clear-formatting"></span></button>
                 </div>
 
                 <div class="cms-tb-group" data-group="link">
@@ -203,7 +173,6 @@
                 </div>
             </div>
 
-            <!-- 1.2 Выплывающий блок прогресса загрузки (стартовая прозрачность задана инлайн) -->
             <div id="cms-progress-bar" class="cms-glass-card" style="opacity: 0; pointer-events: none;">
                 <span class="cms-progress-label" id="cms-progress-label">Загружено (0/0)</span>
                 <div class="cms-progress-track">
@@ -211,12 +180,10 @@
                 </div>
             </div>
 
-            <!-- 1.3 Всплывающий список ревизий (стартовая прозрачность задана инлайн) -->
             <div id="cms-revisions-pop" class="cms-glass-card" style="opacity: 0; pointer-events: none;">
                 <ul>${revItemsHtml}</ul>
             </div>
 
-            <!-- 1.4 Главный юзербар -->
             <div id="cms-userbar" class="cms-glass-card">
                 <label class="cms-switch-label" title="Включить/выключить режим редактирования">
                     <input type="checkbox" class="cms-switch-input" id="cms-toggle-edit">
@@ -404,25 +371,19 @@
         });
     };
 
+    // Выход из системы
     const initLogoutEvent = () => {
         const btnLogout = document.getElementById('cms-btn-logout');
         if (btnLogout) {
             btnLogout.addEventListener('click', () => {
-                fetch('/admin/userapi.php?action=logout', {
-                    method: 'POST',
-                    credentials: 'same-origin'
-                })
-                .then(async r => {
-                    const text = await r.text();
-                    try { return JSON.parse(text); } catch (e) { return {}; }
-                })
-                .then(res => {
-                    if (res && res.success) location.reload();
+                sendAjax('/admin/userapi.php', { action: 'logout' }, () => {
+                    location.reload();
                 });
             });
         }
     };
 
+    // Откат ревизий
     const initRollbackEvents = () => {
         document.addEventListener('click', (e) => {
             const item = e.target.closest('.cms-rev-item');
@@ -431,34 +392,13 @@
                 const dateText = item.innerText;
 
                 if (confirm(`Откатить страницу к состоянию от ${dateText}?`)) {
-                    fetch('/admin/userapi.php?action=rollback_revision', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'same-origin',
-                        body: JSON.stringify({
-                            revision_file: fileName,
-                            filepath: getCustomFilePath(),
-                            url: window.location.href
-                        })
-                    })
-                    .then(async r => {
-                        const text = await r.text();
-                        try {
-                            return JSON.parse(text);
-                        } catch (e) {
-                            console.error('CMS Rollback Raw Error:', text);
-                            throw new Error('Cсырой ответ сервера: ' + text.substring(0, 200));
-                        }
-                    })
-                    .then(res => {
-                        if (res && res.success) {
-                            location.reload();
-                        } else {
-                            alert('Ошибка отката: ' + (res.message || 'Неизвестная ошибка'));
-                        }
-                    })
-                    .catch((err) => {
-                        alert('Ошибка сети или сервера: ' + err.message);
+                    sendAjax('/admin/userapi.php', {
+                        action: 'rollback_revision',
+                        revision_file: fileName,
+                        filepath: getCustomFilePath(),
+                        url: window.location.href
+                    }, () => {
+                        location.reload();
                     });
                 }
             }
@@ -662,90 +602,73 @@
                 }
             });
 
-            // ШАГ 1: Первичное сохранение текста + СОЗДАНИЕ 1 РЕВИЗИИ (всегда первым)
+            // ШАГ 1: Сохранение текста
             const formData = new FormData();
+            formData.append('action', 'save_page');
             formData.append('filepath', getCustomFilePath());
             formData.append('url', window.location.href);
             formData.append('changes', JSON.stringify(changes));
 
-            try {
-                const r = await fetch('/admin/userapi.php?action=save_page', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    body: formData
-                });
-                const text = await r.text();
-                const res = JSON.parse(text);
-                if (!res || !res.success) {
-                    throw new Error(res.message || 'Ошибка сохранения текста');
+            sendAjax('/admin/userapi.php', formData, async () => {
+                
+                // ШАГ 2: Поочередная загрузка изображений
+                if (imageTasks.length > 0) {
+                    progressFill.style.width = '0%';
+                    progressLabel.innerText = `Загружено (0/${imageTasks.length})`;
+                    progressBar.classList.add('active');
+                
+                    const total = imageTasks.length;
+                
+                    for (let i = 0; i < total; i++) {
+                        const task = imageTasks[i];
+                        const imgEl = document.getElementById(task.id);
+                        const currentSrc = imgEl ? (imgEl.getAttribute('src') || '') : '';
+                
+                        const imgFormData = new FormData();
+                        imgFormData.append('action', 'upload_single_image');
+                        imgFormData.append('filepath', getCustomFilePath());
+                        imgFormData.append('url', window.location.href);
+                        imgFormData.append('target_id', task.id);
+                        imgFormData.append('target_src', currentSrc);
+                        imgFormData.append('image', task.file);
+                
+                        // Напрямую ждем выполнения sendAjax!
+                        error = false;
+                        await sendAjax('/admin/userapi.php', imgFormData, () => {
+                            const pct = Math.round(((i + 1) / total) * 100);
+                            progressFill.style.width = pct + '%';
+                            progressLabel.innerText = `Загружено (${i + 1}/${total})`;
+                        },
+                        null,
+                        () => {
+                            progressBar.classList.remove('active');
+                            document.body.classList.remove('cms-ajax-loading');
+                            btnSave.removeAttribute('disabled');
+                            error = true;
+                        });
+                
+                        if (error) {
+                            return;
+                        }
+                    }
+                
+                    progressBar.classList.remove('active');
                 }
-            } catch (err) {
-                alert('Ошибка при сохранении: ' + err.message);
+
+                // ШАГ 3: Завершение
+                document.body.classList.remove('cms-ajax-loading');
+                editedElements.clear();
+                stagedImageFiles.clear();
+                document.querySelectorAll('.editable.edited').forEach(el => el.classList.remove('edited'));
+                btnSave.setAttribute('disabled', 'true');
+                setActiveElement(null);
+
+                refreshRevisionsList();
+
+            }, () => {
                 document.body.classList.remove('cms-ajax-loading');
                 btnSave.removeAttribute('disabled');
-                return;
-            }
-
-            // ШАГ 2: Поочередная загрузка изображений
-            if (imageTasks.length > 0) {
-                progressFill.style.width = '0%';
-                progressLabel.innerText = `Загружено (0/${imageTasks.length})`;
-                progressBar.classList.add('active');
-
-                const total = imageTasks.length;
-
-                for (let i = 0; i < total; i++) {
-                    const task = imageTasks[i];
-                    const imgEl = document.getElementById(task.id);
-                    const currentSrc = imgEl ? (imgEl.getAttribute('src') || '') : '';
-
-                    const imgFormData = new FormData();
-                    imgFormData.append('filepath', getCustomFilePath());
-                    imgFormData.append('url', window.location.href);
-                    imgFormData.append('target_id', task.id);
-                    imgFormData.append('target_src', currentSrc);
-                    imgFormData.append('image', task.file);
-
-                    try {
-                        const r = await fetch('/admin/userapi.php?action=upload_single_image', {
-                            method: 'POST',
-                            credentials: 'same-origin',
-                            body: imgFormData
-                        });
-                        const text = await r.text();
-                        const res = JSON.parse(text);
-
-                        if (!res || !res.success) {
-                            throw new Error(res.message || `Ошибка загрузки файла ${i + 1}`);
-                        }
-
-                        // Обновляем индикатор загрузки
-                        const pct = Math.round(((i + 1) / total) * 100);
-                        progressFill.style.width = pct + '%';
-                        progressLabel.innerText = `Загружено (${i + 1}/${total})`;
-
-                    } catch (err) {
-                        alert(`Ошибка при загрузке изображения ${i + 1} из ${total}: ` + err.message);
-                        progressBar.classList.remove('active');
-                        document.body.classList.remove('cms-ajax-loading');
-                        btnSave.removeAttribute('disabled');
-                        return;
-                    }
-                }
-
-                progressBar.classList.remove('active');
-            }
-
-            // ШАГ 3: Мягкое финализирование состояния на клиенте БЕЗ перезагрузки страницы
-            document.body.classList.remove('cms-ajax-loading');
-            editedElements.clear();
-            stagedImageFiles.clear();
-            document.querySelectorAll('.editable.edited').forEach(el => el.classList.remove('edited'));
-            btnSave.setAttribute('disabled', 'true');
-            setActiveElement(null);
-
-            // Бесшовно обновляем список ревизий и счетчик
-            refreshRevisionsList();
+            });
         });
     };
 })();

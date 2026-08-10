@@ -1,19 +1,22 @@
 let ajaxing = false;
 
 export async function sendAjax(url, data, successFunc, failFunc) {
-    if (!data || !data.action || ajaxing) return;
+    if (!data || ajaxing) return false;
     ajaxing = true;
 
-    const params = new URLSearchParams(data);
+    const isFormData = data instanceof FormData;
+    const body = isFormData ? data : new URLSearchParams(data);
+
+    const headers = { 'X-Requested-With': 'XMLHttpRequest' };
+    if (!isFormData) {
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
 
     try {
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: params
+            headers: headers,
+            body: body
         });
 
         const rawText = await response.text();
@@ -25,30 +28,31 @@ export async function sendAjax(url, data, successFunc, failFunc) {
             res = null;
         }
 
-        // 1. Системная ошибка (PHP упал, 500/403 или вернул не JSON)
+        // 1. Системная ошибка
         if (!response.ok || !res) {
-            failFunc(res || rawText);
+            if (failFunc) failFunc(res || rawText);
 
             const errorText = (res && res.message) 
                 ? res.message 
                 : (rawText ? rawText.trim() : 'Unknown error');
 
             alert((response.status || 0) + ': ' + errorText);
-            return;
+            return false;
         }
 
-        // 2. Логика PHP (success: true / false)
+        // 2. Логика PHP
         if (res.success !== true) {
-            failFunc(res);
-            return;
+            if (failFunc) failFunc(res);
+            return false;
         }
 
-        successFunc(res);
+        if (successFunc) successFunc(res);
+        return true;
 
     } catch (err) {
-        failFunc(err);
-
+        if (failFunc) failFunc(err);
         alert('0: ' + (err.message || 'Network error'));
+        return false;
     } finally {
         ajaxing = false;
     }
