@@ -42,8 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            sendAjax('index.php', {
-                action: 'setup',
+            sendAjax({
+                module: 'superadmin',
+                method: 'setup',
                 login: setupForm.querySelector('[name="login"]').value,
                 password: pass,
                 password_confirm: passConfirm
@@ -60,8 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             hideError(errorAlert);
 
-            sendAjax('index.php', {
-                action: 'login',
+            sendAjax({
+                module: 'auth',
+                method: 'login',
                 login: loginForm.querySelector('[name="login"]').value,
                 password: loginForm.querySelector('[name="password"]').value
             }, (res) => {
@@ -74,7 +76,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnLogout = document.getElementById('btnLogout');
     if (btnLogout) {
         btnLogout.addEventListener('click', () => {
-            sendAjax('index.php', { action: 'logout' }, () => location.reload());
+            sendAjax(
+                {
+                    module: 'auth',
+                    method: 'logout',
+                },
+                () => location.reload()
+            );
         });
     }
 
@@ -109,8 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             hideError(modalErrorAlert);
 
-            sendAjax('index.php', {
-                action: 'add_user',
+            sendAjax({
+                module: 'superadmin',
+                method: 'add_user',
                 user: addUserForm.querySelector('[name="user"]').value,
                 password: addUserForm.querySelector('[name="password"]').value,
                 role: addUserForm.querySelector('[name="role"]').value
@@ -127,8 +136,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (deleteBtn) {
             const userRow = deleteBtn.closest('.user-row');
             if (userRow && confirm('Удалить пользователя?')) {
-                sendAjax('index.php', {
-                    action: 'delete_user',
+                sendAjax({
+                    module: 'superadmin',
+                    method: 'delete_user',
                     id: userRow.dataset.id
                 }, (result) => {
                     updateUsersList(result.html);
@@ -163,8 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isSaved) return;
                 isSaved = true;
 
-                sendAjax('index.php', {
-                    action: 'update_field',
+                sendAjax({
+                    module: 'superadmin',
+                    method: 'update_field',
                     id: id,
                     field: field,
                     value: select.value
@@ -197,7 +208,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 sendAjax('index.php', {
-                    action: 'update_field',
+                    module: 'superadmin',
+                    method: 'update_field',
                     id: id,
                     field: field,
                     value: newVal

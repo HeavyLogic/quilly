@@ -36,7 +36,7 @@ export async function sendAjax(data, successFunc, failFunc) {
                 ? res.message 
                 : (rawText ? rawText.trim() : 'Unknown error');
 
-            alert((response.status || 0) + ': ' + errorText);
+            modal((response.status || 0) + ': ' + errorText);
             return false;
         }
 
@@ -51,7 +51,7 @@ export async function sendAjax(data, successFunc, failFunc) {
 
     } catch (err) {
         if (failFunc) failFunc(err);
-        alert('0: ' + (err.message || 'Network error'));
+        modal('0: ' + (err.message || 'Network error'));
         return false;
     } finally {
         ajaxing = false;
@@ -64,5 +64,97 @@ export function on(event, selector, handler) {
         if (target) {
             handler.call(target, e); // handler.call передает target в переменнную 'this'
         }
+    });
+}
+
+export function modal(htmlContent) {
+    return new Promise((resolve) => {
+        // 1. Фон (оверлей)
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(3px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999999;
+            font-family: system-ui, -apple-system, sans-serif;
+            box-sizing: border-box;
+        `;
+
+        // 2. Модальное окно
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: #ffffff;
+            padding: 20px 24px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            max-width: 420px;
+            width: 90%;
+            color: #222222;
+            font-size: 14px;
+            line-height: 1.5;
+            box-sizing: border-box;
+        `;
+
+        // 3. Контент (поддерживает HTML)
+        const content = document.createElement('div');
+        content.style.cssText = `
+            margin-bottom: 20px;
+            word-break: break-word;
+        `;
+        content.innerHTML = htmlContent;
+
+        // 4. Кнопка ОК
+        const btnActions = document.createElement('div');
+        btnActions.style.cssText = 'display: flex; justify-content: flex-end;';
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        okBtn.style.cssText = `
+            background: #0066cc;
+            color: #ffffff;
+            border: none;
+            padding: 8px 22px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            outline: none;
+        `;
+
+        btnActions.appendChild(okBtn);
+        modal.appendChild(content);
+        modal.appendChild(btnActions);
+        overlay.appendChild(modal);
+
+        // Функция закрытия и ПОЛНОГО уничтожения из DOM
+        const destroy = () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            overlay.remove(); // Полностью удаляет модалку из DOM
+            resolve();
+        };
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' || e.key === 'Enter') {
+                destroy();
+            }
+        };
+
+        // События закрытия (клик на ОК, клик на фон, клавиши Enter/Esc)
+        okBtn.addEventListener('click', destroy);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) destroy();
+        });
+        document.addEventListener('keydown', handleKeyDown);
+
+        // Вставляем в документ
+        document.body.appendChild(overlay);
+        okBtn.focus();
     });
 }

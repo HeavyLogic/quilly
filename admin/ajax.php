@@ -21,21 +21,21 @@ class ajax extends base {
         $auth = new auth()->check_auth();
         if (!$auth) {
             if (($_POST['module'] != 'auth') or ($_POST['method'] != 'check_auth')) {
-                $ajax->error('У вас нет прав на выполнение этого действия.');
+                $this->error('У вас нет прав на выполнение этого действия.');
             }
         }
 
         // подключаем модуль, куда ссылается ajax-запрос
         $module_file = __DIR__ .'/modules/'.$_POST['module'].'.php';
         if (!file_exists($module_file)) {
-            $ajax->error('Файл модуля не существует: '.$module_file);
+            $this->error('Файл модуля не существует: '.$module_file);
         }
         require_once $module_file;
 
         // запускаем модуль
         $module = new $_POST['module']();
         if (!method_exists($module, $_POST['method'])) {
-            $ajax->error('Метод не существует: '.$_POST['method']);
+            $this->error('Метод не существует: '.$_POST['method']);
         }
 
         // запускаем метод
