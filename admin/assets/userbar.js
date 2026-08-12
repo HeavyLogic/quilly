@@ -211,14 +211,15 @@ import { sendAjax } from './common.js';
             }
         });
 
-        // Главный обработчик кликов для выбора элементов
+        // Закрываем окно ревизий при клике в любое место (независимо от режима редактирования!)
         document.addEventListener('click', (e) => {
-            // Закрываем окно ревизий при клике в любое место (независимо от режима редактирования!)
-            const revsPop = document.getElementById('cms-revisions-pop');
-            if (revsPop && !e.target.closest('#cms-btn-revs, #cms-revisions-pop')) {
-                revsPop.classList.remove('active');
+            if (!e.target.closest('#cms-btn-revs, #cms-revisions-pop')) {
+                document.getElementById('cms-revisions-pop')?.classList.remove('active');
             }
+        });
 
+        // Главный обработчик кликов для выбора элементов холста в режиме редактирования
+        document.addEventListener('click', (e) => {
             if (!document.body.classList.contains('cms-edit-mode')) return;
 
             // Разрешаем клики внутри элементов интерфейса CMS
@@ -243,7 +244,32 @@ import { sendAjax } from './common.js';
 
             if (hitEditableImgs.length > 1) {
                 setActiveElement(null);
-                showImagePickerModal(hitEditableImgs);
+
+                // Окно выбора из списка наложенных друг на друга картинок
+                const modal = document.getElementById('cms-img-modal');
+                if (!modal) return;
+
+                const list = modal.querySelector('.cms-img-modal-list');
+                list.innerHTML = '';
+
+                hitEditableImgs.forEach(img => {
+                    const titleText = img.getAttribute('alt') || img.src.split('/').pop() || 'Изображение';
+
+                    const item = document.createElement('div');
+                    item.className = 'cms-img-choice';
+                    item.title = titleText;
+                    item.innerHTML = `<img src="${img.src}" alt="${titleText}">`;
+
+                    item.addEventListener('click', () => {
+                        modal.classList.remove('active');
+                        activateToolbarForElement(img);
+                    });
+
+                    list.appendChild(item);
+                });
+
+                modal.classList.add('active');
+                
                 return;
             } else if (hitEditableImgs.length === 1) {
                 activateToolbarForElement(hitEditableImgs[0]);
@@ -482,32 +508,4 @@ import { sendAjax } from './common.js';
 
         updateToolbarButtonStates();
     };
-
-    // Окно выбора из списка наложенных друг на друга картинок
-    const showImagePickerModal = (imgs) => {
-        const modal = document.getElementById('cms-img-modal');
-        if (!modal) return;
-
-        const list = modal.querySelector('.cms-img-modal-list');
-        list.innerHTML = '';
-
-        imgs.forEach(img => {
-            const titleText = img.getAttribute('alt') || img.src.split('/').pop() || 'Изображение';
-
-            const item = document.createElement('div');
-            item.className = 'cms-img-choice';
-            item.title = titleText;
-            item.innerHTML = `<img src="${img.src}" alt="${titleText}">`;
-
-            item.addEventListener('click', () => {
-                modal.classList.remove('active');
-                activateToolbarForElement(img);
-            });
-
-            list.appendChild(item);
-        });
-
-        modal.classList.add('active');
-    };
-
 })();
