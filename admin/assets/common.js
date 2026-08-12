@@ -1,6 +1,6 @@
 let ajaxing = false;
 
-export async function sendAjax(url, data, successFunc, failFunc) {
+export async function sendAjax(data, successFunc, failFunc) {
     if (!data || ajaxing) return false;
     ajaxing = true;
 
@@ -13,7 +13,7 @@ export async function sendAjax(url, data, successFunc, failFunc) {
     }
 
     try {
-        const response = await fetch(url, {
+        const response = await fetch('/admin/ajax.php', {
             method: 'POST',
             headers: headers,
             body: body
@@ -56,4 +56,13 @@ export async function sendAjax(url, data, successFunc, failFunc) {
     } finally {
         ajaxing = false;
     }
+}
+
+export function on(event, selector, handler) {
+    document.addEventListener(event, (e) => {
+        const target = e.target.closest(selector);
+        if (target) {
+            handler.call(target, e); // handler.call передает target в переменнную 'this'
+        }
+    });
 }
