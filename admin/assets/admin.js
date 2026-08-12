@@ -1,4 +1,5 @@
 import { sendAjax } from './common.js';
+// TODO: Заюзать больше из common.js
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -43,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             sendAjax({
-                module: 'superadmin',
+                module: 'superuser',
                 method: 'setup',
                 login: setupForm.querySelector('[name="login"]').value,
                 password: pass,
@@ -118,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hideError(modalErrorAlert);
 
             sendAjax({
-                module: 'superadmin',
+                module: 'superuser',
                 method: 'add_user',
                 user: addUserForm.querySelector('[name="user"]').value,
                 password: addUserForm.querySelector('[name="password"]').value,
@@ -137,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const userRow = deleteBtn.closest('.user-row');
             if (userRow && confirm('Удалить пользователя?')) {
                 sendAjax({
-                    module: 'superadmin',
+                    module: 'superuser',
                     method: 'delete_user',
                     id: userRow.dataset.id
                 }, (result) => {
@@ -174,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isSaved = true;
 
                 sendAjax({
-                    module: 'superadmin',
+                    module: 'superuser',
                     method: 'update_field',
                     id: id,
                     field: field,
@@ -207,8 +208,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                sendAjax('index.php', {
-                    module: 'superadmin',
+                sendAjax({
+                    module: 'superuser',
                     method: 'update_field',
                     id: id,
                     field: field,

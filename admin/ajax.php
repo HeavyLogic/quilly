@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/modules/base.php';
+require_once __DIR__ . '/includes/db.php';
 
 class ajax extends base {
 	public function __construct() {
@@ -13,15 +14,17 @@ class ajax extends base {
             $this->error('Не получен ключ method.');
         }
         
-        define('CMS_EXEC', true);
         require_once __DIR__ . '/config.php';
 
         // проверка авторизации
         require_once __DIR__ . '/modules/auth.php';
         $auth = new auth()->check_auth();
         if (!$auth) {
-            if (($_POST['module'] != 'auth') or ($_POST['method'] != 'check_auth')) {
-                $this->error('У вас нет прав на выполнение этого действия.');
+            if (!in_array($_POST['module'].'::'.$_POST['method'], array(
+                    'auth::check_auth',
+                    'auth::login',
+                ))) {
+                    $this->error('У вас нет прав на выполнение этого действия.');
             }
         }
 

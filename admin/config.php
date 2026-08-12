@@ -1,9 +1,9 @@
 <?php
-// Защита от прямого запроса файла из браузера
-if (!defined('CMS_EXEC')) {
-    http_response_code(403);
-    exit('Access denied');
-}
+// TODO: Защита от прямого запроса файла из браузера
+// if (!defined('CMS_EXEC')) {
+//     http_response_code(403);
+//     exit('Access denied');
+// }
 
 // Суперглобальная константа конфигурации
 define('CMS_CONFIG', [

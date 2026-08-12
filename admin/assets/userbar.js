@@ -1,4 +1,4 @@
-import { sendAjax } from './common.js';
+import { sendAjax, on } from './common.js';
 
 (() => {
     const editedElements = new Set();
@@ -307,11 +307,12 @@ import { sendAjax } from './common.js';
         // Нажатие кнопки "Сохранить"
         on('click', '#cms-btn-save', function(e) {
             if (editedElements.size === 0) return;
+            const revsPop = document.getElementById('cms-revisions-pop');
 
             // Активируем глобальное состояние AJAX загрузки
             document.body.classList.add('cms-ajax-loading');
             this.setAttribute('disabled', 'true');
-            if (revsPop) revsPop.classList.remove('active');
+            revsPop?.classList.remove('active');
 
             const changes = {};
             const imageTasks = [];
@@ -396,7 +397,6 @@ import { sendAjax } from './common.js';
                 setActiveElement(null);
 
                 // Заменяем блок списка ревизий
-                const revsPop = document.getElementById('cms-revisions-pop');
                 if (revsPop && result.revisions_list) {
                     revsPop.outerHTML = result.revisions_list;
                 }
@@ -442,7 +442,7 @@ import { sendAjax } from './common.js';
                 return;
             }
             e.stopPropagation();
-            revsPop.classList.toggle('active');
+            document.getElementById('cms-revisions-pop').classList.toggle('active');
         });
     };
 

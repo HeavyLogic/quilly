@@ -1,9 +1,8 @@
 <?php
-define('CMS_EXEC', true);
 require_once __DIR__ . '/config.php';
-$output_mode = null;
-
 require_once __DIR__ . '/modules/base.php';
+
+$output_mode = null;
 
 // Проверяем есть ли вообще пользователи в базе. Если нет - первоначальная настройка
 require_once __DIR__ . '/includes/db.php';
