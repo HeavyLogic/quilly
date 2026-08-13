@@ -3,36 +3,6 @@ class upload extends base {
 
     private $allowed_exts = ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'svg', 'webp', 'avif'];
     
-    // Проверка и резолв локального физического пути картинки по её src
-    private function resolveLocalImagePath(string $src, string paths::$site_root_dir): ?string {
-        $src = trim($src);
-        if (!$src) return null;
-
-        $url = $_POST['url'] ?? '';
-        $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
-        $siteScheme = parse_url($url, PHP_URL_SCHEME) ?? 'http';
-        $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
-
-        // Если в src зашит абсолютный URL текущего сайта — срезаем домен
-        if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
-            $src = substr($src, strlen($siteBaseUrl));
-        }
-
-        // Если ссылка на сторонний ресурс — игнорируем
-        if (preg_match('#^(https?:)?//#i', $src)) {
-            return null;
-        }
-
-        $cleanRelPath = ltrim(parse_url($src, PHP_URL_PATH) ?? $src, '/');
-        paths::$file_full_path = paths::$site_root_dir . '/' . $cleanRelPath;
-
-        if (file_exists(paths::$file_full_path) && is_file(paths::$file_full_path)) {
-            return paths::$file_full_path;
-        }
-
-        return null;
-    }
-
     // Конвертация картинок в WebP (включая миниатюры) через Imagick или GD с полным логированием
     private function createWebpThumbnail(string $filePath, string $outputWebpPath, string $origExt = '', ?int $quality = null, ?int $targetWidth = null, ?int $maxHeight = null): bool {
         $quality = $quality ?? CMS_CONFIG['images']['quality'] ?? 80;
@@ -148,10 +118,8 @@ class upload extends base {
         }
 
         try {
-            $uploadSubDir = CMS_CONFIG['images']['upload_dir'];
-            $uploadsDir = paths::$site_root_dir . '/' . $uploadSubDir;
-            if (!is_dir($uploadsDir)) {
-                @mkdir($uploadsDir, 0755, true);
+            if (!is_dir(paths::$upload_dir)) {
+                @mkdir(paths::$upload_dir, 0755, true);
             }
 
             $tmpFile = $_FILES['image']['tmp_name'];
@@ -174,13 +142,13 @@ class upload extends base {
             $format = $isPassthrough ? $origExt : 'webp';
 
             $candidateName = $cleanFilename;
-            while (file_exists($uploadsDir . '/' . $candidateName . '.' . $format)) {
+            while (file_exists(paths::$upload_dir . '/' . $candidateName . '.' . $format)) {
                 $candidateName .= $chars[rand(0, strlen($chars) - 1)];
             }
 
             $finalFilename = $candidateName . '.' . $format;
-            $outputFullPath = $uploadsDir . '/' . $finalFilename;
-            $outputRelPath = $uploadSubDir . '/' . $finalFilename;
+            $outputFullPath = paths::$upload_dir . '/' . $finalFilename;
+            $outputRelPath = CMS_CONFIG['images']['upload_dir'] . '/' . $finalFilename;
             $htmlSrc = '/' . $outputRelPath;
 
             $srcSetEntries = [];
@@ -224,12 +192,12 @@ class upload extends base {
                     if ($webpSize > $origSize) {
                         @unlink($outputFullPath);
                         $candidateName = $cleanFilename;
-                        while (file_exists($uploadsDir . '/' . $candidateName . '.' . $origExt)) {
+                        while (file_exists(paths::$upload_dir . '/' . $candidateName . '.' . $origExt)) {
                             $candidateName .= $chars[rand(0, strlen($chars) - 1)];
                         }
                         $finalFilename = $candidateName . '.' . $origExt;
-                        $outputFullPath = $uploadsDir . '/' . $finalFilename;
-                        $outputRelPath = $uploadSubDir . '/' . $finalFilename;
+                        $outputFullPath = paths::$upload_dir . '/' . $finalFilename;
+                        $outputRelPath = CMS_CONFIG['images']['upload_dir'] . '/' . $finalFilename;
                         $htmlSrc = '/' . $outputRelPath;
         
                         if (!@move_uploaded_file($tmpFile, $outputFullPath)) {
@@ -254,7 +222,7 @@ class upload extends base {
                 $minReqH = $imgElTemp ? $parseDim($imgElTemp->getAttribute('data-height')) : 0;
 
                 // Нарезка миниатюр
-                $thumbsDir = $uploadsDir . '/thumbs';
+                $thumbsDir = paths::$upload_dir . '/thumbs';
                 if (!is_dir($thumbsDir)) {
                     @mkdir($thumbsDir, 0755, true);
                 }
@@ -296,7 +264,7 @@ class upload extends base {
                 $oldFilesToDelete = [];
 
                 if ($oldSrc) {
-                    $p = $this->resolveLocalImagePath($oldSrc, paths::$site_root_dir);
+                    $p = paths::resolve_local_image_path($oldSrc);
                     if ($p) $oldFilesToDelete[] = $p;
                 }
 
@@ -305,7 +273,7 @@ class upload extends base {
                     foreach ($srcSetEntries as $entry) {
                         $parts = preg_split('/\s+/', trim($entry));
                         if (!empty($parts[0])) {
-                            $p = $this->resolveLocalImagePath($parts[0], paths::$site_root_dir);
+                            $p = paths::resolve_local_image_path($parts[0]);
                             if ($p) $oldFilesToDelete[] = $p;
                         }
                     }
@@ -332,7 +300,7 @@ class upload extends base {
                     $aspectRatio = (isset($masterWidth) && $masterWidth > 0) ? ($masterHeight / $masterWidth) : 0;
 
                     foreach ($thumbSizes as $w) {
-                        $thumbRelPath = $uploadSubDir . '/thumbs/' . $baseFilename . '-' . $w . '.webp';
+                        $thumbRelPath = CMS_CONFIG['images']['upload_dir'] . '/thumbs/' . $baseFilename . '-' . $w . '.webp';
                         $thumbAbsPath = paths::$site_root_dir . '/' . $thumbRelPath;
 
                         if (file_exists($thumbAbsPath)) {

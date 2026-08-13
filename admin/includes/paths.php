@@ -8,13 +8,14 @@ class paths {
     public static $revision_filename;
     public static $revision_folder_path;
     public static $revision_zip_path;
+    public static $upload_dir;
 
     /**
      * Инициализация всех путей
      */
     public static function init() {
         self::$site_root_dir  = realpath(__DIR__ . '/../../');
-        self::$file_rel_path  = self::resolveTargetRelPath();
+        self::$file_rel_path  = self::get_html_rel_path();
         self::$file_full_path = self::$site_root_dir . '/' . self::$file_rel_path;
         self::$file_full_dir  = realpath(dirname(self::$file_full_path));
         self::$post_url  = $_POST['url'] ?? '';
@@ -24,10 +25,12 @@ class paths {
 			self::$revision_folder_path = CMS_CONFIG['revisions_dir'] . '/' . self::$file_rel_path;
 			self::$revision_zip_path = self::$revision_folder_path . '/' . self::$revision_filename;
 		}
+
+        self::$upload_dir = self::$site_root_dir . '/' . CMS_CONFIG['images']['upload_dir'];
     }
 
 	// Универсальный резолвер пути к файлу
-    private static function resolveTargetRelPath() {
+    private static function get_html_rel_path() {
 		$rootDir = realpath(__DIR__ . '/../../');
         $customFilePath = trim($_POST['filepath'] ?? '');
 
@@ -53,5 +56,35 @@ class paths {
         }
 
         return $cleanPath;
+    }
+
+    // Проверка и резолв локального физического пути картинки по её src
+    public static function resolve_local_image_path(string $src): ?string {
+        $src = trim($src);
+        if (!$src) return null;
+
+        $url = $_POST['url'] ?? '';
+        $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
+        $siteScheme = parse_url($url, PHP_URL_SCHEME) ?? 'http';
+        $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
+
+        // Если в src зашит абсолютный URL текущего сайта — срезаем домен
+        if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
+            $src = substr($src, strlen($siteBaseUrl));
+        }
+
+        // Если ссылка на сторонний ресурс — игнорируем
+        if (preg_match('#^(https?:)?//#i', $src)) {
+            return null;
+        }
+
+        $cleanRelPath = ltrim(parse_url($src, PHP_URL_PATH) ?? $src, '/');
+        paths::$file_full_path = paths::$site_root_dir . '/' . $cleanRelPath;
+
+        if (file_exists(paths::$file_full_path) && is_file(paths::$file_full_path)) {
+            return paths::$file_full_path;
+        }
+
+        return null;
     }
 }
