@@ -307,16 +307,18 @@ import { sendAjax, on } from './common.js';
         // Нажатие кнопки "Сохранить"
         on('click', '#cms-btn-save', function(e) {
             if (editedElements.size === 0) return;
+        
+            const saveBtn = this;
             const revsPop = document.getElementById('cms-revisions-pop');
-
+        
             // Активируем глобальное состояние AJAX загрузки
             document.body.classList.add('cms-ajax-loading');
-            this.setAttribute('disabled', 'true');
+            saveBtn.setAttribute('disabled', 'true');
             revsPop?.classList.remove('active');
-
+        
             const changes = {};
             const imageTasks = [];
-
+        
             editedElements.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
@@ -329,7 +331,7 @@ import { sendAjax, on } from './common.js';
                     }
                 }
             });
-
+        
             // ШАГ 1: Сохранение текста
             const formData = new FormData();
             formData.append('module', 'editor');
@@ -337,8 +339,9 @@ import { sendAjax, on } from './common.js';
             formData.append('filepath', getCustomFilePath());
             formData.append('url', window.location.href);
             formData.append('changes', JSON.stringify(changes));
-
-            sendAjax(formData, async () => {
+        
+            // Принимаем result из ответа PHP
+            sendAjax(formData, async (result) => {
                 const progressBar = document.getElementById('cms-progress-bar');
                 const progressLabel = document.getElementById('cms-progress-label');
                 const progressFill = document.getElementById('cms-progress-fill');
@@ -347,7 +350,7 @@ import { sendAjax, on } from './common.js';
                 if (imageTasks.length > 0) {
                     progressFill.style.width = '0%';
                     progressLabel.innerText = `Загружено (0/${imageTasks.length})`;
-                    progressBar.classList.add('active');
+                    progressBar?.classList.add('active');
                     
                     const total = imageTasks.length;
                 
@@ -358,58 +361,59 @@ import { sendAjax, on } from './common.js';
                 
                         const imgFormData = new FormData();
                         imgFormData.append('module', 'upload');
-                        imgFormData.append('action', 'upload_single_image');
+                        imgFormData.append('method', 'upload_single_image');
                         imgFormData.append('filepath', getCustomFilePath());
                         imgFormData.append('url', window.location.href);
                         imgFormData.append('target_id', task.id);
                         imgFormData.append('target_src', currentSrc);
                         imgFormData.append('image', task.file);
                 
-                        // Напрямую ждем выполнения sendAjax!
-                        error = false;
+                        let isUploadError = false;
+        
                         await sendAjax(imgFormData, () => {
                             const pct = Math.round(((i + 1) / total) * 100);
-                            progressFill.style.width = pct + '%';
-                            progressLabel.innerText = `Загружено (${i + 1}/${total})`;
-                        },
-                        null,
-                        () => {
-                            progressBar.classList.remove('active');
+                            if (progressFill) progressFill.style.width = pct + '%';
+                            if (progressLabel) progressLabel.innerText = `Загружено (${i + 1}/${total})`;
+                        }, () => {
+                            progressBar?.classList.remove('active');
                             document.body.classList.remove('cms-ajax-loading');
-                            this.removeAttribute('disabled');
-                            error = true;
+                            saveBtn.removeAttribute('disabled');
+                            isUploadError = true;
                         });
                 
-                        if (error) {
+                        if (isUploadError) {
+                            // Выход из цикла
                             return;
                         }
                     }
                 
-                    progressBar.classList.remove('active');
+                    progressBar?.classList.remove('active');
                 }
-
-                // ШАГ 3: Завершение
+        
+                // ШАГ 3: Завершение (выполняется строго внутри колбэка успеха)
                 document.body.classList.remove('cms-ajax-loading');
                 editedElements.clear();
                 stagedImageFiles.clear();
                 document.querySelectorAll('.editable.edited').forEach(el => el.classList.remove('edited'));
-                this.setAttribute('disabled', 'true');
+                saveBtn.setAttribute('disabled', 'true');
                 setActiveElement(null);
-
-                // Заменяем блок списка ревизий
-                if (revsPop && result.revisions_list) {
-                    revsPop.outerHTML = result.revisions_list;
+        
+                // Обновляем блоки ревизий из полученного ответа result
+                const currentRevsPop = document.getElementById('cms-revisions-pop');
+                if (currentRevsPop && result.revisions_list) {
+                    currentRevsPop.outerHTML = result.revisions_list;
                 }
-
-                // Заменяем кнопку ревизий с новым счетчиком
-                const btnRevs = document.getElementById('cms-btn-revs');
-                if (btnRevs && result.revisions_button) {
-                    btnRevs.outerHTML = result.revisions_button;
+        
+                const currentBtnRevs = document.getElementById('cms-btn-revs');
+                if (currentBtnRevs && result.revisions_button) {
+                    currentBtnRevs.outerHTML = result.revisions_button;
                 }
-
+        
             }, () => {
+                // Если первое сохранение текста завершилось ошибкой
+                // TODO: вот этот cms-ajax-loading - внутрь common
                 document.body.classList.remove('cms-ajax-loading');
-                this.removeAttribute('disabled');
+                saveBtn.removeAttribute('disabled');
             });
         });
 
