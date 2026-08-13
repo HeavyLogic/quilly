@@ -98,36 +98,26 @@ class editor extends base {
 
         require_once __DIR__ . '/revisions.php';
         $revisions = new revisions();
-
-        $rootDir = realpath(__DIR__ . '/../../');
-        $url = $_POST['url'] ?? '';
-
-        $targetRelPath = $this->resolveTargetRelPath();
-
-        $fullPath = $rootDir . '/' . $targetRelPath;
-        $realFileDir = realpath(dirname($fullPath));
-
-        // TODO: разобраться что за каша здесь - всё это должно приходить из одного хелпера
-
-        if ($realFileDir === false || strpos($realFileDir, $rootDir) !== 0) {
+        
+        if (paths::$file_full_dir === false || strpos(paths::$file_full_dir, paths::$site_root_dir) !== 0) {
             $this->error('Попытка выхода за пределы корня');
         }
 
-        if (!file_exists($fullPath)) {
-            $this->error('Файл не найден: ' . $targetRelPath);
+        if (!file_exists(paths::$file_full_path)) {
+            $this->error('Файл не найден: ' . paths::$file_rel_path);
         }
 
         $changes = json_decode($_POST['changes'] ?? '{}', true) ?? [];
 
         try {
-            $this->log("save_page(): Клиент вызвал сохранение для '{$targetRelPath}'", 'revisions.txt');
+            $this->log("save_page(): Клиент вызвал сохранение для '".paths::$file_rel_path."'", 'revisions.txt');
 
             // ШАГ 1: Создаем ровно 1 ZIP-ревизию ТЕКУЩЕГО живого состояния (HTML + старые картинки)
-            $revisions->makeRevision($fullPath, $targetRelPath, $rootDir, $url);
+            $revisions->makeRevision();
 
             // ШАГ 2: Сохраняем текстовые изменения
             if (!empty($changes)) {
-                $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
+                $doc = Dom\HTMLDocument::createFromFile(paths::$file_full_path, LIBXML_NOERROR);
 
                 foreach ($changes as $id => $payload) {
                     $element = $doc->getElementById($id);
@@ -152,11 +142,11 @@ class editor extends base {
                 }
 
                 // Фиксируем текст на диске
-                $doc->saveHtmlFile($fullPath);
+                $doc->saveHtmlFile(paths::$file_full_path);
             }
             
             $this->success([
-                'saved_file' => $targetRelPath,
+                'saved_file' => paths::$file_rel_path,
                 'revisions_list' => $revisions->get_revisions_list(),
                 'revisions_button' => $revisions->get_revisions_button(),
             ]);

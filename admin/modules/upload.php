@@ -1,11 +1,14 @@
 <?php
 class upload extends base {
+
+    private $allowed_exts = ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'svg', 'webp', 'avif'];
     
     // Проверка и резолв локального физического пути картинки по её src
-    private function resolveLocalImagePath(string $src, string $url, string $rootDir): ?string {
+    private function resolveLocalImagePath(string $src, string paths::$site_root_dir): ?string {
         $src = trim($src);
         if (!$src) return null;
 
+        $url = $_POST['url'] ?? '';
         $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
         $siteScheme = parse_url($url, PHP_URL_SCHEME) ?? 'http';
         $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
@@ -21,10 +24,10 @@ class upload extends base {
         }
 
         $cleanRelPath = ltrim(parse_url($src, PHP_URL_PATH) ?? $src, '/');
-        $fullPath = $rootDir . '/' . $cleanRelPath;
+        paths::$file_full_path = paths::$site_root_dir . '/' . $cleanRelPath;
 
-        if (file_exists($fullPath) && is_file($fullPath)) {
-            return $fullPath;
+        if (file_exists(paths::$file_full_path) && is_file(paths::$file_full_path)) {
+            return paths::$file_full_path;
         }
 
         return null;
@@ -134,25 +137,19 @@ class upload extends base {
         }
 
         $thumbSizes = CMS_CONFIG['images']['thumb_sizes'] ?? [600, 1200];
-        $allowedExts = ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'svg', 'webp', 'avif'];
         $alwaysCreateThumbs = false; // Флаг: создавать ли файлы на диске, если они не подходят под data-width/data-height
 
-        $rootDir = realpath(__DIR__ . '/../');
-        $url = $_POST['url'] ?? '';
         $targetId = trim($_POST['target_id'] ?? '');
 
         if (!$targetId) $this->error('Не указан ID элемента изображения');
 
-        $targetRelPath = $this->resolveTargetRelPath();
-        $fullPath = $rootDir . '/' . $targetRelPath;
-
-        if (!file_exists($fullPath)) {
-            $this->error('Файл страницы не найден: ' . $targetRelPath);
+        if (!file_exists(paths::$file_full_path)) {
+            $this->error('Файл страницы не найден: ' . paths::$file_rel_path);
         }
 
         try {
             $uploadSubDir = CMS_CONFIG['images']['upload_dir'];
-            $uploadsDir = $rootDir . '/' . $uploadSubDir;
+            $uploadsDir = paths::$site_root_dir . '/' . $uploadSubDir;
             if (!is_dir($uploadsDir)) {
                 @mkdir($uploadsDir, 0755, true);
             }
@@ -162,7 +159,7 @@ class upload extends base {
             $origName = pathinfo($origFullName, PATHINFO_FILENAME);
             $origExt = strtolower(pathinfo($origFullName, PATHINFO_EXTENSION));
 
-            if (!in_array($origExt, $allowedExts, true)) {
+            if (!in_array($origExt, $this->allowed_exts, true)) {
                 $this->error('Неподдерживаемый формат файла: ' . $origExt);
             }
 
@@ -243,7 +240,7 @@ class upload extends base {
                 }
 
                 // Читаем ограничения тега <img>
-                $docTemp = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
+                $docTemp = Dom\HTMLDocument::createFromFile(paths::$file_full_path, LIBXML_NOERROR);
                 $imgElTemp = $docTemp->getElementById($targetId);
 
                 $parseDim = function(?string $val): int {
@@ -289,7 +286,7 @@ class upload extends base {
             }
 
             // ОБНОВЛЕНИЕ DOM В HTML
-            $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
+            $doc = Dom\HTMLDocument::createFromFile(paths::$file_full_path, LIBXML_NOERROR);
             $imgElement = $doc->getElementById($targetId);
 
             if ($imgElement) {
@@ -299,7 +296,7 @@ class upload extends base {
                 $oldFilesToDelete = [];
 
                 if ($oldSrc) {
-                    $p = $this->resolveLocalImagePath($oldSrc, $url, $rootDir);
+                    $p = $this->resolveLocalImagePath($oldSrc, paths::$site_root_dir);
                     if ($p) $oldFilesToDelete[] = $p;
                 }
 
@@ -308,7 +305,7 @@ class upload extends base {
                     foreach ($srcSetEntries as $entry) {
                         $parts = preg_split('/\s+/', trim($entry));
                         if (!empty($parts[0])) {
-                            $p = $this->resolveLocalImagePath($parts[0], $url, $rootDir);
+                            $p = $this->resolveLocalImagePath($parts[0], paths::$site_root_dir);
                             if ($p) $oldFilesToDelete[] = $p;
                         }
                     }
@@ -336,7 +333,7 @@ class upload extends base {
 
                     foreach ($thumbSizes as $w) {
                         $thumbRelPath = $uploadSubDir . '/thumbs/' . $baseFilename . '-' . $w . '.webp';
-                        $thumbAbsPath = $rootDir . '/' . $thumbRelPath;
+                        $thumbAbsPath = paths::$site_root_dir . '/' . $thumbRelPath;
 
                         if (file_exists($thumbAbsPath)) {
                             $calculatedH = (int)round($w * $aspectRatio);
@@ -373,7 +370,7 @@ class upload extends base {
                     }
                 }
 
-                $doc->saveHtmlFile($fullPath);
+                $doc->saveHtmlFile(paths::$file_full_path);
                 
                 $this->success([
                     'relative_path' => $htmlSrc,

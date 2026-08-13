@@ -4,12 +4,14 @@ class revisions extends base {
     private static $revisions_count = 0;
     
     // Поиск, нормализация путей в HTML (приведение к /assets/...) и сборка путей для ZIP
-    private function getEditableImagesPaths(Dom\HTMLDocument $doc, string $url, string $rootDir, string $fullPath): array {
+    private function getEditableImagesPaths(Dom\HTMLDocument $doc): array {
         $imageRelPaths = [];
 
-        $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
-        $siteScheme = parse_url($url, PHP_URL_SCHEME) ?? 'http';
+        $siteDomain = parse_url(paths::$post_url, PHP_URL_HOST) ?? '';
+        $siteScheme = parse_url(paths::$post_url, PHP_URL_SCHEME) ?? 'http';
         $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
+
+        // TODO: Разобраться что здесь за каша с url
 
         $images = $doc->querySelectorAll('img.editable');
         $docModified = false;
@@ -39,7 +41,7 @@ class revisions extends base {
 
             // 4. Формируем путь для ZIP (без ведущего слэша) и путь на диске
             $zipRelPath = ltrim($cleanPath, '/');
-            $fullImgPath = $rootDir . '/' . $zipRelPath;
+            $fullImgPath = paths::$site_root_dir . '/' . $zipRelPath;
 
             if (file_exists($fullImgPath) && is_file($fullImgPath)) {
                 $imageRelPaths[$zipRelPath] = $fullImgPath;
@@ -48,15 +50,15 @@ class revisions extends base {
 
         // Сохраняем измененные корневые пути в HTML перед архивацией
         if ($docModified) {
-            $doc->saveHtmlFile($fullPath);
+            $doc->saveHtmlFile(paths::$file_full_path);
         }
 
         return $imageRelPaths;
     }
    
     // Создание ZIP-ревизии (HTML + все редактируемые картинки)
-    public function makeRevision(string $fullPath, string $targetRelPath, string $rootDir, string $url = ''): void {
-        if (!file_exists($fullPath)) return;
+    public function makeRevision(): void {
+        if (!file_exists(paths::$file_full_path)) return;
 
         $maxRevisions = (int)(CMS_CONFIG['max_revisions'] ?? 10);
         if ($maxRevisions <= 0) {
@@ -65,10 +67,10 @@ class revisions extends base {
         }
 
         // Снимок формируется строго на основе даты последнего изменения файла (filemtime)
-        $lastModTime = @filemtime($fullPath) ?: time();
+        $lastModTime = @filemtime(paths::$file_full_path) ?: time();
         $dateStr = date('Y-m-d_H-i-s', $lastModTime);
 
-        $revParentDir = CMS_CONFIG['revisions_dir'] . '/' . $targetRelPath;
+        $revParentDir = CMS_CONFIG['revisions_dir'] . '/' . paths::$file_rel_path;
         if (!is_dir($revParentDir)) {
             @mkdir($revParentDir, 0755, true);
         }
@@ -82,8 +84,8 @@ class revisions extends base {
             }
         }
 
-        $doc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
-        $imagePaths = $this->getEditableImagesPaths($doc, $url, $rootDir, $fullPath);
+        $doc = Dom\HTMLDocument::createFromFile(paths::$file_full_path, LIBXML_NOERROR);
+        $imagePaths = $this->getEditableImagesPaths($doc);
 
         $zip = new ZipArchive();
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
@@ -91,7 +93,7 @@ class revisions extends base {
         }
 
         // Добавляем HTML-файл по его относительному пути
-        $zip->addFile($fullPath, ltrim($targetRelPath, '/'));
+        $zip->addFile(paths::$file_full_path, ltrim(paths::$file_rel_path, '/'));
 
         // Добавляем все локальные картинки
         foreach ($imagePaths as $relPath => $absPath) {
@@ -115,10 +117,9 @@ class revisions extends base {
 
     // Сканирование списка ZIP-ревизий
     public function get_revisions_list() {
-        $parentDir = CMS_CONFIG['revisions_dir'] . '/' . $this->resolveTargetRelPath();
-        if (!is_dir($parentDir)) return [];
+        if (!is_dir(paths::$revision_folder_path)) return [];
 
-        $files = @glob($parentDir . '/*.zip');
+        $files = @glob(paths::$revision_folder_path . '/*.zip');
         if (!$files) return [];
 
         rsort($files);
@@ -177,34 +178,25 @@ class revisions extends base {
     }
 
     public function rollback_revision() {
-        $rawInput = file_get_contents('php://input');
-        $data = json_decode($rawInput, true);
-
-        $revisionFilename = basename($data['revision_file'] ?? '');
-        $url = $data['url'] ?? '';
-
-        if (!$revisionFilename) $this->error('Не указан файл ревизии');
-
-        $rootDir = realpath(__DIR__ . '/../');
-        $targetRelPath = $this->resolveTargetRelPath();
-        $fullPath = $rootDir . '/' . $targetRelPath;
-
-        $revZipPath = CMS_CONFIG['revisions_dir'] . '/' . $targetRelPath . '/' . $revisionFilename;
-
-        if (!file_exists($revZipPath)) {
-            $this->error('Файл ревизии не найден: ' . $revisionFilename);
+    
+        if (!paths::$revision_filename) {
+            $this->error('Не указан файл ревизии');
+        }
+    
+        if (!file_exists(paths::$revision_zip_path)) {
+            $this->error('Файл ревизии не найден: ' . paths::$revision_filename);
         }
 
         try {
             // 1. Создаем бэкап ТЕКУЩЕГО живого состояния перед откатом
-            $this->makeRevision($fullPath, $targetRelPath, $rootDir, $url);
+            $this->makeRevision();
 
             // 2. Находим картинки текущей живой версии
-            $currentDoc = Dom\HTMLDocument::createFromFile($fullPath, LIBXML_NOERROR);
-            $currentImages = $this->getEditableImagesPaths($currentDoc, $url, $rootDir, $fullPath);
+            $currentDoc = Dom\HTMLDocument::createFromFile(paths::$file_full_path, LIBXML_NOERROR);
+            $currentImages = $this->getEditableImagesPaths($currentDoc);
 
             // 3. Безопасно удаляем с диска текущий живой HTML и его живые картинки
-            @unlink($fullPath);
+            @unlink(paths::$file_full_path);
             foreach ($currentImages as $relPath => $absPath) {
                 if (file_exists($absPath)) {
                     @unlink($absPath);
@@ -213,19 +205,12 @@ class revisions extends base {
 
             // 4. Распаковываем ZIP-архив целевой ревизии в корень сайта
             $zip = new ZipArchive();
-            if ($zip->open($revZipPath) === true) {
-                $zip->extractTo($rootDir);
+            if ($zip->open(paths::$revision_zip_path) === true) {
+                $zip->extractTo(paths::$site_root_dir);
                 $zip->close();
 
-                // 5. Вытягиваем оригинальную дату из имени ZIP и явно возвращаем её распакованному HTML
-                $dateStr = pathinfo($revisionFilename, PATHINFO_FILENAME);
-                $dt = DateTime::createFromFormat('Y-m-d_H-i-s', $dateStr);
-                if ($dt) {
-                    @touch($fullPath, $dt->getTimestamp());
-                }
-
                 // 6. Удаляем архивированный файл ревизии, так как эта версия стала живым сайтом
-                @unlink($revZipPath);
+                @unlink(paths::$revision_zip_path);
 
                 $this->success(['message' => 'Откат успешно выполнен']);
             } else {
