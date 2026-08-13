@@ -11,8 +11,6 @@ class revisions extends base {
         $siteScheme = parse_url(paths::$post_url, PHP_URL_SCHEME) ?? 'http';
         $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
 
-        // TODO: Разобраться что здесь за каша с url
-
         $images = $doc->querySelectorAll('img.editable');
         $docModified = false;
 
@@ -70,12 +68,11 @@ class revisions extends base {
         $lastModTime = @filemtime(paths::$file_full_path) ?: time();
         $dateStr = date('Y-m-d_H-i-s', $lastModTime);
 
-        $revParentDir = CMS_CONFIG['revisions_dir'] . '/' . paths::$file_rel_path;
-        if (!is_dir($revParentDir)) {
-            @mkdir($revParentDir, 0755, true);
+        if (!is_dir(paths::$revisions_folder_path)) {
+            @mkdir(paths::$revisions_folder_path, 0755, true);
         }
 
-        $zipPath = $revParentDir . '/' . $dateStr . '.zip';
+        $zipPath = paths::$revisions_folder_path . '/' . $dateStr . '.zip';
 
         // Если архив с такой датой уже существует — пересоздаем его
         if (file_exists($zipPath)) {
@@ -103,7 +100,7 @@ class revisions extends base {
         $zip->close();
 
         // Ротация бэкапов
-        $zipFiles = @glob($revParentDir . '/*.zip');
+        $zipFiles = @glob(paths::$revisions_folder_path . '/*.zip');
         if (is_array($zipFiles) && count($zipFiles) > $maxRevisions) {
             sort($zipFiles);
             while (count($zipFiles) > $maxRevisions) {
@@ -117,10 +114,10 @@ class revisions extends base {
 
     // Сканирование списка ZIP-ревизий
     public function get_revisions_list() {
-        if (!is_dir(paths::$revision_folder_path)) return [];
+        if (!is_dir(paths::$revisions_folder_path)) return '';
 
-        $files = @glob(paths::$revision_folder_path . '/*.zip');
-        if (!$files) return [];
+        $files = @glob(paths::$revisions_folder_path . '/*.zip');
+        if (!$files) return '';
 
         rsort($files);
 
@@ -178,13 +175,17 @@ class revisions extends base {
     }
 
     public function rollback_revision() {
+        $revision_filename = basename($_POST['revision_file'] ?? '');
+        if ($revision_filename) {
+            $revision_zip_path = paths::$revisions_folder_path . '/' . $revision_filename;
+        }
     
-        if (!paths::$revision_filename) {
+        if (!$revision_filename) {
             $this->error('Не указан файл ревизии');
         }
     
-        if (!file_exists(paths::$revision_zip_path)) {
-            $this->error('Файл ревизии не найден: ' . paths::$revision_filename);
+        if (!file_exists($revision_zip_path)) {
+            $this->error('Файл ревизии не найден: ' . $revision_filename);
         }
 
         try {
@@ -205,12 +206,12 @@ class revisions extends base {
 
             // 4. Распаковываем ZIP-архив целевой ревизии в корень сайта
             $zip = new ZipArchive();
-            if ($zip->open(paths::$revision_zip_path) === true) {
+            if ($zip->open($revision_zip_path) === true) {
                 $zip->extractTo(paths::$site_root_dir);
                 $zip->close();
 
                 // 6. Удаляем архивированный файл ревизии, так как эта версия стала живым сайтом
-                @unlink(paths::$revision_zip_path);
+                @unlink($revision_zip_path);
 
                 $this->success(['message' => 'Откат успешно выполнен']);
             } else {

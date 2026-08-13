@@ -5,9 +5,7 @@ class paths {
     public static $file_full_path;
     public static $file_full_dir;
     public static $post_url;
-    public static $revision_filename;
-    public static $revision_folder_path;
-    public static $revision_zip_path;
+    public static $revisions_folder_path;
     public static $upload_dir;
 
     /**
@@ -20,12 +18,7 @@ class paths {
         self::$file_full_dir  = realpath(dirname(self::$file_full_path));
         self::$post_url  = $_POST['url'] ?? '';
 
-		self::$revision_filename = basename($_POST['revision_file'] ?? '');
-		if (self::$revision_filename) {
-			self::$revision_folder_path = CMS_CONFIG['revisions_dir'] . '/' . self::$file_rel_path;
-			self::$revision_zip_path = self::$revision_folder_path . '/' . self::$revision_filename;
-		}
-
+        self::$revisions_folder_path = CMS_CONFIG['revisions_dir'] . '/' . self::$file_rel_path;
         self::$upload_dir = self::$site_root_dir . '/' . CMS_CONFIG['images']['upload_dir'];
     }
 
@@ -56,35 +49,5 @@ class paths {
         }
 
         return $cleanPath;
-    }
-
-    // Проверка и резолв локального физического пути картинки по её src
-    public static function resolve_local_image_path(string $src): ?string {
-        $src = trim($src);
-        if (!$src) return null;
-
-        $url = $_POST['url'] ?? '';
-        $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
-        $siteScheme = parse_url($url, PHP_URL_SCHEME) ?? 'http';
-        $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
-
-        // Если в src зашит абсолютный URL текущего сайта — срезаем домен
-        if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
-            $src = substr($src, strlen($siteBaseUrl));
-        }
-
-        // Если ссылка на сторонний ресурс — игнорируем
-        if (preg_match('#^(https?:)?//#i', $src)) {
-            return null;
-        }
-
-        $cleanRelPath = ltrim(parse_url($src, PHP_URL_PATH) ?? $src, '/');
-        paths::$file_full_path = paths::$site_root_dir . '/' . $cleanRelPath;
-
-        if (file_exists(paths::$file_full_path) && is_file(paths::$file_full_path)) {
-            return paths::$file_full_path;
-        }
-
-        return null;
     }
 }

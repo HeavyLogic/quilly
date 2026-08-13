@@ -264,7 +264,7 @@ class upload extends base {
                 $oldFilesToDelete = [];
 
                 if ($oldSrc) {
-                    $p = paths::resolve_local_image_path($oldSrc);
+                    $p = $this->resolve_local_image_path($oldSrc);
                     if ($p) $oldFilesToDelete[] = $p;
                 }
 
@@ -273,7 +273,7 @@ class upload extends base {
                     foreach ($srcSetEntries as $entry) {
                         $parts = preg_split('/\s+/', trim($entry));
                         if (!empty($parts[0])) {
-                            $p = paths::resolve_local_image_path($parts[0]);
+                            $p = $this->resolve_local_image_path($parts[0]);
                             if ($p) $oldFilesToDelete[] = $p;
                         }
                     }
@@ -352,6 +352,37 @@ class upload extends base {
             $this->log("PHP Exception при upload_single_image: " . $e->getMessage(), 'uploads.txt');
             $this->error('Ошибка загрузки: ' . $e->getMessage());
         }
+    }
+
+    
+    // Проверка и резолв локального физического пути картинки по её src
+    private function resolve_local_image_path(string $src): ?string {
+        $src = trim($src);
+        if (!$src) return null;
+
+        $url = $_POST['url'] ?? '';
+        $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
+        $siteScheme = parse_url($url, PHP_URL_SCHEME) ?? 'http';
+        $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
+
+        // Если в src зашит абсолютный URL текущего сайта — срезаем домен
+        if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
+            $src = substr($src, strlen($siteBaseUrl));
+        }
+
+        // Если ссылка на сторонний ресурс — игнорируем
+        if (preg_match('#^(https?:)?//#i', $src)) {
+            return null;
+        }
+
+        $cleanRelPath = ltrim(parse_url($src, PHP_URL_PATH) ?? $src, '/');
+        paths::$file_full_path = paths::$site_root_dir . '/' . $cleanRelPath;
+
+        if (file_exists(paths::$file_full_path) && is_file(paths::$file_full_path)) {
+            return paths::$file_full_path;
+        }
+
+        return null;
     }
 
 }
