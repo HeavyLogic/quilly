@@ -1,14 +1,14 @@
 <?php
-// TODO: Защита от прямого запроса файла из браузера
-// if (!defined('CMS_EXEC')) {
-//     http_response_code(403);
-//     exit('Access denied');
-// }
+// Защита от прямого запроса файла из браузера
+if (!defined('QUILLY_INIT')) {
+    http_response_code(403);
+    exit('Access denied');
+}
 
 // Суперглобальная константа конфигурации
 define('CMS_CONFIG', [
     // Режим отладки (запись в debug_dir)
-    'debug' => true,
+    'debug' => false,
 
     // Директория хранения файлов отладочных логов
     'debug_dir' => rtrim(__DIR__ . '/../debug', '/\\'),

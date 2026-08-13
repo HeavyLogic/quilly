@@ -1,16 +1,28 @@
 <?php
 class base {
 	protected function success(array $data = []): void {
-		echo json_encode(array_merge(['success' => true], $data));
-		die;
+        if (!$_POST['method']) {
+            return;
+        }
+
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array_merge(['success' => true], $data));
+        die;
 	}
 	
-	protected function error(string $message, array $extra = []): void {
-		echo json_encode(array_merge(['success' => false, 'message' => $message], $extra));
+	protected function error(string $message): void {
+        if ($_POST['method']) {
+			header('Content-Type: application/json; charset=utf-8');
+			echo json_encode(['success' => false, 'message' => $message]);
+		} else {
+			echo '<div style="background:#ffebe9;color:#d1242f;padding:15px;border:1px solid #ff8182;border-radius:6px;font-family:sans-serif;margin:10px;">';
+			echo '<b>Ошибка:</b> ' . $message;
+			echo '</div>';
+		}
 		die;
 	}
 
-	protected function writeDebugLog(string $message, $filename): void {
+	protected function log(string $message, $filename): void {
 		if (!defined('CMS_CONFIG') || !CMS_CONFIG['debug']) return;
 
 		$debugDir = CMS_CONFIG['debug_dir'];

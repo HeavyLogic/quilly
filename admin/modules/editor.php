@@ -1,9 +1,7 @@
 <?php
-require_once __DIR__ . '/revisions.php';
-require_once __DIR__ . '/auth.php';
-
 class editor extends base {
     public function render_userbar() {
+        require_once __DIR__ . '/revisions.php';
         $revisions = new revisions();
 
         ob_start();
@@ -98,6 +96,9 @@ class editor extends base {
             $this->error('Требуется PHP 8.4+');
         }
 
+        require_once __DIR__ . '/revisions.php';
+        $revisions = new revisions();
+
         $rootDir = realpath(__DIR__ . '/../../');
         $url = $_POST['url'] ?? '';
 
@@ -119,10 +120,10 @@ class editor extends base {
         $changes = json_decode($_POST['changes'] ?? '{}', true) ?? [];
 
         try {
-            $this->writeDebugLog("save_page(): Клиент вызвал сохранение для '{$targetRelPath}'", 'revisions.txt');
+            $this->log("save_page(): Клиент вызвал сохранение для '{$targetRelPath}'", 'revisions.txt');
 
             // ШАГ 1: Создаем ровно 1 ZIP-ревизию ТЕКУЩЕГО живого состояния (HTML + старые картинки)
-            new revisions()->makeRevision($fullPath, $targetRelPath, $rootDir, $url);
+            $revisions->makeRevision($fullPath, $targetRelPath, $rootDir, $url);
 
             // ШАГ 2: Сохраняем текстовые изменения
             if (!empty($changes)) {
@@ -153,8 +154,6 @@ class editor extends base {
                 // Фиксируем текст на диске
                 $doc->saveHtmlFile($fullPath);
             }
-
-            $revisions = new revisions();
             
             $this->success([
                 'saved_file' => $targetRelPath,
@@ -163,7 +162,7 @@ class editor extends base {
             ]);
 
         } catch (Throwable $e) {
-            $this->writeDebugLog("PHP Exception при сохранении save_page: " . $e->getMessage(), 'revisions.txt');
+            $this->log("PHP Exception при сохранении save_page: " . $e->getMessage(), 'revisions.txt');
             $this->error('Ошибка сохранения PHP: ' . $e->getMessage());
         }
     }

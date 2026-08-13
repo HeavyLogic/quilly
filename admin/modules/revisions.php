@@ -1,6 +1,4 @@
 <?php
-require_once __DIR__ . '/base.php';
-
 class revisions extends base {
 
     private static $revisions_count = 0;
@@ -62,7 +60,7 @@ class revisions extends base {
 
         $maxRevisions = (int)(CMS_CONFIG['max_revisions'] ?? 10);
         if ($maxRevisions <= 0) {
-            $this->writeDebugLog("makeRevision(): Создание ревизий отключено (max_revisions = {$maxRevisions})", 'revisions.txt');
+            $this->log("makeRevision(): Создание ревизий отключено (max_revisions = {$maxRevisions})", 'revisions.txt');
             return;
         }
 
@@ -234,12 +232,9 @@ class revisions extends base {
                 $this->error('Не удалось открыть ZIP-архив ревизии');
             }
         } catch (Throwable $e) {
-            $this->writeDebugLog("PHP Exception при откате ревизии: " . $e->getMessage(), 'revisions.txt');
+            $this->log("PHP Exception при откате ревизии: " . $e->getMessage(), 'revisions.txt');
             $this->error('Ошибка отката: ' . $e->getMessage());
         }
     }
 
 }
-
-// для вывода ошибок
-$ajax = new ajax();

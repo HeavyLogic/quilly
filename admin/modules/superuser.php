@@ -1,5 +1,4 @@
 <?php
-
 class superuser extends base {
 
     public function __construct() {

@@ -1,6 +1,4 @@
 <?php
-require_once __DIR__ . '/base.php';
-
 class upload extends base {
     
     // Проверка и резолв локального физического пути картинки по её src
@@ -54,7 +52,7 @@ class upload extends base {
             }
         }
 
-        $this->writeDebugLog("Старт генерации WebP: '{$filePath}' (формат: {$ext}) -> '{$outputWebpPath}' (макс. ширина: {$maxWidth})", 'uploads.txt');
+        $this->log("Старт генерации WebP: '{$filePath}' (формат: {$ext}) -> '{$outputWebpPath}' (макс. ширина: {$maxWidth})", 'uploads.txt');
 
         if (extension_loaded('imagick')) {
             try {
@@ -75,7 +73,7 @@ class upload extends base {
 
                 return $converted && file_exists($outputWebpPath) && filesize($outputWebpPath) > 0;
             } catch (Throwable $e) {
-                $this->writeDebugLog("Imagick Exception: " . $e->getMessage(), 'uploads.txt');
+                $this->log("Imagick Exception: " . $e->getMessage(), 'uploads.txt');
                 return false;
             }
         } elseif (extension_loaded('gd')) {
@@ -204,7 +202,7 @@ class upload extends base {
                 $masterCreated = $this->createWebpThumbnail($tmpFile, $masterTmpPath, $origExt, 100);
 
                 if (!$masterCreated || !file_exists($masterTmpPath)) {
-                    $this->writeDebugLog("Ошибка: Не удалось создать промежуточный мастер-файл из '{$origFullName}'.", 'uploads.txt');
+                    $this->log("Ошибка: Не удалось создать промежуточный мастер-файл из '{$origFullName}'.", 'uploads.txt');
                     $this->error('Не удалось обработать исходное изображение');
                 }
 
@@ -371,7 +369,7 @@ class upload extends base {
                 foreach ($oldFilesToDelete as $oldFilePath) {
                     if ($oldFilePath && $oldFilePath !== $outputFullPath && file_exists($oldFilePath)) {
                         @unlink($oldFilePath);
-                        $this->writeDebugLog("Удален старый заменённый файл из src/srcset: '{$oldFilePath}'", 'uploads.txt');
+                        $this->log("Удален старый заменённый файл из src/srcset: '{$oldFilePath}'", 'uploads.txt');
                     }
                 }
 
@@ -386,7 +384,7 @@ class upload extends base {
             }
 
         } catch (Throwable $e) {
-            $this->writeDebugLog("PHP Exception при upload_single_image: " . $e->getMessage(), 'uploads.txt');
+            $this->log("PHP Exception при upload_single_image: " . $e->getMessage(), 'uploads.txt');
             $this->error('Ошибка загрузки: ' . $e->getMessage());
         }
     }

@@ -580,15 +580,9 @@ body.cms-edit-mode .editable:not([id]) {
     cursor: not-allowed !important;
 }
 
-body.cms-edit-mode .editable.edited {
-    outline: 2px dashed #2ec4b6 !important;
-}
-
 /* Активный выбранный элемент прямо сейчас */
 body.cms-edit-mode .editable.cms-active-target {
-    outline: 3px solid #ff007f !important;
-    outline-offset: 3px;
-    box-shadow: 0 0 10px rgba(255, 0, 127, 0.5) !important;
+    outline: 2px solid #00ccaa !important;
 }
 
 /* Минимальная высота пустых li при редактировании */

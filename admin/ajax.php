@@ -1,11 +1,8 @@
 <?php
-require_once __DIR__ . '/modules/base.php';
-require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/init.php';
 
 class ajax extends base {
 	public function __construct() {
-        header('Content-Type: application/json');
-
         if (!($_POST['module'] ?? '')) {
             $this->error('Не получен ключ module.');
         }
@@ -13,11 +10,8 @@ class ajax extends base {
         if (!($_POST['method'] ?? '')) {
             $this->error('Не получен ключ method.');
         }
-        
-        require_once __DIR__ . '/config.php';
 
         // проверка авторизации
-        require_once __DIR__ . '/modules/auth.php';
         $auth = new auth()->check_auth();
         if (!$auth) {
             if (!in_array($_POST['module'].'::'.$_POST['method'], array(

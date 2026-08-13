@@ -1,17 +1,15 @@
 <?php
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/modules/base.php';
-
+// Этот файл - точка входа для админки
+require_once __DIR__ . '/includes/init.php';
 $output_mode = null;
 
 // Проверяем есть ли вообще пользователи в базе. Если нет - первоначальная настройка
-require_once __DIR__ . '/includes/db.php';
+
 $db = new db();
 if ($db->is_empty()) {
     // первоначальная настройка
     $output_mode = 'setup';
 } else {
-    require_once __DIR__ . '/modules/auth.php';
     $auth = new auth();
 
     if ($auth->check_auth()) {
