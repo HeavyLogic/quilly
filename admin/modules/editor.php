@@ -1,6 +1,13 @@
 <?php
 class editor extends base {
     public function render_userbar() {
+        if (!auth::check_auth()) {
+            $this->success([
+                'head' => '',
+                'html' => '',
+            ]);
+        }
+
         require_once __DIR__ . '/revisions.php';
         $revisions = new revisions();
 

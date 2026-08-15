@@ -7,7 +7,7 @@ class auth extends base {
      * Проверка авторизации текущего пользователя по куке
      * @return array|false Данные ['user' => ..., 'role' => ...] или false
      */
-    public function check_auth() {
+    public static function check_auth() {
         if (self::$auth !== null) {
             return self::$auth;
         }
@@ -34,8 +34,8 @@ class auth extends base {
      * Проверяет, является ли текущий пользователь админом
      * @return bool
      */
-    public function is_admin() {
-        $user = $this->check_auth();
+    public static function is_admin() {
+        $user = self::check_auth();
         return $user && ($user['role'] ?? '') === 'admin';
     }
 

@@ -12,13 +12,15 @@ class ajax extends base {
         }
 
         // проверка авторизации
-        $auth = new auth()->check_auth();
-        if (!$auth) {
+        if (!auth::check_auth()) {
+            $target = $_POST['module'].'::'.$_POST['method'];
             if (!in_array($_POST['module'].'::'.$_POST['method'], array(
                     'auth::check_auth',
                     'auth::login',
+                    'editor::render_userbar',
+                    'superuser::setup',
                 ))) {
-                    $this->error('У вас нет прав на выполнение этого действия.');
+                    $this->error('У вас нет прав на выполнение этого действия: '.$target);
             }
         }
 

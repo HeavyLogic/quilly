@@ -10,10 +10,8 @@ if ($db->is_empty()) {
     // первоначальная настройка
     $output_mode = 'setup';
 } else {
-    $auth = new auth();
-
-    if ($auth->check_auth()) {
-        if ($auth->is_admin()) {
+    if (auth::check_auth()) {
+        if (auth::is_admin()) {
             // UI админки
             $output_mode = 'dashboard';
             require_once __DIR__ . '/modules/superuser.php';
