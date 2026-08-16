@@ -97,6 +97,7 @@ class upload extends base {
 
         return false;
     }
+
     public function upload_single_image() {
         if (!extension_loaded('imagick') && !extension_loaded('gd')) {
             $this->error('Сервер не поддерживает Imagick или GD');
@@ -107,8 +108,6 @@ class upload extends base {
         }
 
         $thumbSizes = CMS_CONFIG['images']['thumb_sizes'] ?? [600, 1200];
-        $alwaysCreateThumbs = false; // Флаг: создавать ли файлы на диске, если они не подходят под data-width/data-height
-
         $targetId = trim($_POST['target_id'] ?? '');
 
         if (!$targetId) $this->error('Не указан ID элемента изображения');
@@ -148,8 +147,9 @@ class upload extends base {
 
             $finalFilename = $candidateName . '.' . $format;
             $outputFullPath = paths::$upload_dir . '/' . $finalFilename;
-            $outputRelPath = CMS_CONFIG['images']['upload_dir'] . '/' . $finalFilename;
-            $htmlSrc = '/' . $outputRelPath;
+            
+            // Веб-путь относительного корня сайта для вставки в HTML src
+            $htmlSrc = '/' . ltrim(str_replace(paths::$site_root_dir, '', $outputFullPath), '/\\');
 
             $srcSetEntries = [];
 
@@ -197,8 +197,7 @@ class upload extends base {
                         }
                         $finalFilename = $candidateName . '.' . $origExt;
                         $outputFullPath = paths::$upload_dir . '/' . $finalFilename;
-                        $outputRelPath = CMS_CONFIG['images']['upload_dir'] . '/' . $finalFilename;
-                        $htmlSrc = '/' . $outputRelPath;
+                        $htmlSrc = '/' . ltrim(str_replace(paths::$site_root_dir, '', $outputFullPath), '/\\');
         
                         if (!@move_uploaded_file($tmpFile, $outputFullPath)) {
                             @unlink($masterTmpPath);
@@ -218,7 +217,6 @@ class upload extends base {
                     return (int)$clean;
                 };
 
-                $minReqW = $imgElTemp ? $parseDim($imgElTemp->getAttribute('data-width')) : 0;
                 $minReqH = $imgElTemp ? $parseDim($imgElTemp->getAttribute('data-height')) : 0;
 
                 // Нарезка миниатюр
@@ -240,10 +238,7 @@ class upload extends base {
 
                         $calculatedH = (int)round($w * $aspectRatio);
 
-                        if (!$alwaysCreateThumbs) {
-                            if ($minReqW > 0 && $w < $minReqW) continue;
-                            if ($minReqH > 0 && $calculatedH < $minReqH) continue;
-                        }
+                        if ($minReqH > 0 && $calculatedH < $minReqH) continue;
 
                         $thumbFullPath = $thumbsDir . '/' . $baseFilename . '-' . $w . '.webp';
                         $this->createWebpThumbnail($masterTmpPath, $thumbFullPath, 'webp', $targetQuality, $w);
@@ -298,18 +293,19 @@ class upload extends base {
 
                     $baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
                     $aspectRatio = (isset($masterWidth) && $masterWidth > 0) ? ($masterHeight / $masterWidth) : 0;
+                    $thumbsDir = paths::$upload_dir . '/thumbs';
 
                     foreach ($thumbSizes as $w) {
-                        $thumbRelPath = CMS_CONFIG['images']['upload_dir'] . '/thumbs/' . $baseFilename . '-' . $w . '.webp';
-                        $thumbAbsPath = paths::$site_root_dir . '/' . $thumbRelPath;
+                        $thumbFullPath = $thumbsDir . '/' . $baseFilename . '-' . $w . '.webp';
 
-                        if (file_exists($thumbAbsPath)) {
+                        if (file_exists($thumbFullPath)) {
                             $calculatedH = (int)round($w * $aspectRatio);
 
                             if ($minReqW > 0 && $w < $minReqW) continue;
                             if ($minReqH > 0 && $calculatedH < $minReqH) continue;
 
-                            $newSrcSetEntries[] = '/' . ltrim($thumbRelPath, '/') . " {$w}w";
+                            $thumbWebUrl = '/' . ltrim(str_replace(paths::$site_root_dir, '', $thumbFullPath), '/\\');
+                            $newSrcSetEntries[] = $thumbWebUrl . " {$w}w";
                         }
                     }
 
@@ -354,8 +350,7 @@ class upload extends base {
         }
     }
 
-    
-    // Проверка и резолв локального физического пути картинки по её src
+    // Проверка и резолв локального физического пути картинки по её src (для последующего удаления с диска)
     private function resolve_local_image_path(string $src): ?string {
         $src = trim($src);
         if (!$src) return null;
@@ -375,14 +370,13 @@ class upload extends base {
             return null;
         }
 
-        $cleanRelPath = ltrim(parse_url($src, PHP_URL_PATH) ?? $src, '/');
-        paths::$file_full_path = paths::$site_root_dir . '/' . $cleanRelPath;
+        $cleanRelPath = ltrim(parse_url($src, PHP_URL_PATH) ?? $src, '/\\');
+        $image_full_path = paths::$site_root_dir . '/' . $cleanRelPath;
 
-        if (file_exists(paths::$file_full_path) && is_file(paths::$file_full_path)) {
-            return paths::$file_full_path;
+        if (file_exists($image_full_path) && is_file($image_full_path)) {
+            return $image_full_path;
         }
 
         return null;
     }
-
 }

@@ -23,14 +23,13 @@ class base {
 	}
 
 	protected function log(string $message, $filename): void {
-		if (!defined('CMS_CONFIG') || !CMS_CONFIG['debug']) return;
+		if (!CMS_CONFIG['debug']) return;
 
-		$debugDir = CMS_CONFIG['debug_dir'];
-		if (!is_dir($debugDir)) {
-			@mkdir($debugDir, 0755, true);
+		if (!is_dir(paths::$debug_dir)) {
+			@mkdir(paths::$debug_dir, 0755, true);
 		}
 
-		$logFile = $debugDir . '/'.$filename;
+		$logFile = paths::$debug_dir . '/'.$filename;
 		$timestamp = date('Y-m-d H:i:s');
 		$formattedMessage = "[{$timestamp}] {$message}\n";
 
