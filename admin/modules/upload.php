@@ -2,101 +2,6 @@
 class upload extends base {
 
     private $allowed_exts = ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'svg', 'webp', 'avif'];
-    
-    // Конвертация картинок в WebP (включая миниатюры) через Imagick или GD с полным логированием
-    private function createWebpThumbnail(string $filePath, string $outputWebpPath, string $origExt = '', ?int $quality = null, ?int $targetWidth = null, ?int $maxHeight = null): bool {
-        $quality = $quality ?? CMS_CONFIG['images']['quality'] ?? 80;
-        $maxWidth = $targetWidth ?? CMS_CONFIG['images']['max_width'] ?? 1920;
-        // Если передана точная ширина для миниатюры, снимаем ограничение по высоте (99999), чтобы пропорции не резались
-        $maxHeight = $maxHeight ?? ($targetWidth ? 99999 : (CMS_CONFIG['images']['max_height'] ?? 1920));
-
-        $ext = strtolower($origExt) ?: strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-
-        if (!$ext || $ext === 'tmp') {
-            $imgInfo = @getimagesize($filePath);
-            if ($imgInfo && isset($imgInfo['mime'])) {
-                $mimeMap = [
-                    'image/jpeg' => 'jpg',
-                    'image/jpg'  => 'jpg',
-                    'image/png'  => 'png',
-                    'image/webp' => 'webp'
-                ];
-                $ext = $mimeMap[$imgInfo['mime']] ?? '';
-            }
-        }
-
-        $this->log("Старт генерации WebP: '{$filePath}' (формат: {$ext}) -> '{$outputWebpPath}' (макс. ширина: {$maxWidth})", 'uploads.txt');
-
-        if (extension_loaded('imagick')) {
-            try {
-                $image = new Imagick($filePath);
-                $origWidth = $image->getImageWidth();
-                $origHeight = $image->getImageHeight();
-
-                // Пропорциональный ресайз
-                if ($origWidth > $maxWidth || $origHeight > $maxHeight) {
-                    $ratio = min($maxWidth / $origWidth, $maxHeight / $origHeight);
-                    $image->resizeImage((int)($origWidth * $ratio), (int)($origHeight * $ratio), Imagick::FILTER_LANCZOS, 1);
-                }
-
-                $image->setImageFormat('webp');
-                $image->setImageCompressionQuality($quality);
-                $converted = $image->writeImage($outputWebpPath);
-                $image->destroy();
-
-                return $converted && file_exists($outputWebpPath) && filesize($outputWebpPath) > 0;
-            } catch (Throwable $e) {
-                $this->log("Imagick Exception: " . $e->getMessage(), 'uploads.txt');
-                return false;
-            }
-        } elseif (extension_loaded('gd')) {
-            if (!function_exists('imagewebp')) return false;
-
-            $image = null;
-            if ($ext === 'jpg' || $ext === 'jpeg') {
-                $image = @imagecreatefromjpeg($filePath);
-            } elseif ($ext === 'png') {
-                $image = @imagecreatefrompng($filePath);
-                if ($image && function_exists('imagepalettetotruecolor') && !imageistruecolor($image)) {
-                    imagepalettetotruecolor($image);
-                }
-            } elseif ($ext === 'webp' && function_exists('imagecreatefromwebp')) {
-                $image = @imagecreatefromwebp($filePath);
-            } elseif ($ext === 'bmp' && function_exists('imagecreatefrombmp')) {
-                $image = @imagecreatefrombmp($filePath);
-            } elseif ($ext === 'avif' && function_exists('imagecreatefromavif')) {
-                $image = @imagecreatefromavif($filePath);
-            }
-
-            if (!$image) return false;
-
-            $origWidth = imagesx($image);
-            $origHeight = imagesy($image);
-
-            // Пропорциональный ресайз
-            if ($origWidth > $maxWidth || $origHeight > $maxHeight) {
-                $ratio = min($maxWidth / $origWidth, $maxHeight / $origHeight);
-                $newWidth = (int)($origWidth * $ratio);
-                $newHeight = (int)($origHeight * $ratio);
-
-                $resizedImage = imagecreatetruecolor($newWidth, $newHeight);
-                if ($ext === 'png' || $ext === 'webp') {
-                    imagealphablending($resizedImage, false);
-                    imagesavealpha($resizedImage, true);
-                }
-                imagecopyresampled($resizedImage, $image, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
-                imagedestroy($image);
-                $image = $resizedImage;
-            }
-
-            $converted = @imagewebp($image, $outputWebpPath, $quality);
-            imagedestroy($image);
-
-            return $converted && file_exists($outputWebpPath) && filesize($outputWebpPath) > 0;
-        }
-
-        return false;
-    }
 
     public function upload_single_image() {
         if (!extension_loaded('imagick') && !extension_loaded('gd')) {
@@ -107,13 +12,26 @@ class upload extends base {
             $this->error('Файл изображения не получен');
         }
 
-        $thumbSizes = CMS_CONFIG['images']['thumb_sizes'] ?? [600, 1200];
         $targetId = trim($_POST['target_id'] ?? '');
 
         if (!$targetId) $this->error('Не указан ID элемента изображения');
 
         if (!file_exists(paths::$file_full_path)) {
             $this->error('Файл страницы не найден: ' . paths::$file_rel_path);
+        }
+
+        // Читаем HTML и находим элемент в самом начале
+        $doc = Dom\HTMLDocument::createFromFile(paths::$file_full_path, LIBXML_NOERROR);
+        $imgElement = $doc ? $doc->getElementById($targetId) : null;
+
+        if (!$imgElement) {
+            $this->error('Элемент #' . $targetId . ' не найден в HTML');
+        }
+
+        // Проверяем ограничение по минимальной высоте из атрибута data-min-height
+        $minReqH = 0;
+        if ($imgElement->hasAttribute('data-min-height')) {
+            $minReqH = (int)preg_replace('/[^\d]/', '', $imgElement->getAttribute('data-min-height'));
         }
 
         try {
@@ -130,13 +48,13 @@ class upload extends base {
                 $this->error('Неподдерживаемый формат файла: ' . $origExt);
             }
 
-            // Юникод-фильтрация символов
+            // Юникод-фильтрация символов для имени файла
             $cleanFilename = preg_replace('/[^\p{L}\p{N}_\-]/u', '_', $origName);
             $cleanFilename = trim(preg_replace('/_+/', '_', $cleanFilename), '_') ?: 'img';
 
             $chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
-            // ОПРЕДЕЛЯЕМ РЕЖИМ: SVG и GIF заливаем напрямую (passthrough), остальное конвертируем в WebP
+            // ОПРЕДЕЛЯЕМ РЕЖИМ: SVG и GIF заливаем напрямую, остальное обрабатываем в WebP
             $isPassthrough = in_array($origExt, ['svg', 'gif'], true);
             $format = $isPassthrough ? $origExt : 'webp';
 
@@ -147,11 +65,8 @@ class upload extends base {
 
             $finalFilename = $candidateName . '.' . $format;
             $outputFullPath = paths::$upload_dir . '/' . $finalFilename;
-            
             // Веб-ссылка для вставки в HTML src
             $htmlSrc = $this->abs_path_to_web_url($outputFullPath);
-
-            $srcSetEntries = [];
 
             if ($isPassthrough) {
                 // ПРЯМАЯ ЗАГРУЗКА ДЛЯ GIF И SVG
@@ -159,36 +74,20 @@ class upload extends base {
                     $this->error('Не удалось сохранить файл ' . $origExt);
                 }
             } else {
-                // РАСТРОВАЯ КОНВЕРТАЦИЯ В WEBP + МИНИАТЮРЫ
+                // РАСТРОВАЯ ОБРАБОТКА В ОДИН ПРОХОД В ПАМЯТИ
                 @set_time_limit(120);
-                @ini_set('memory_limit', '512M');
 
-                $masterTmpPath = sys_get_temp_dir() . '/cms_master_' . md5(uniqid()) . '.webp';
-                $masterCreated = $this->createWebpThumbnail($tmpFile, $masterTmpPath, $origExt, 100);
-
-                if (!$masterCreated || !file_exists($masterTmpPath)) {
-                    $this->log("Ошибка: Не удалось создать промежуточный мастер-файл из '{$origFullName}'.", 'uploads.txt');
-                    $this->error('Не удалось обработать исходное изображение');
-                }
-
-                $targetQuality = (int)(CMS_CONFIG['images']['quality'] ?? 80);
-
-                if ($targetQuality >= 100) {
-                    $converted = @copy($masterTmpPath, $outputFullPath);
-                } else {
-                    $converted = $this->createWebpThumbnail($masterTmpPath, $outputFullPath, 'webp', $targetQuality);
-                }
-
-                if (!$converted || !file_exists($outputFullPath)) {
-                    @unlink($masterTmpPath);
-                    $this->error('Не удалось сконвертировать изображение в WebP');
+                if (extension_loaded('imagick')) {
+                    $this->process_imagick($tmpFile, $outputFullPath, $finalFilename, $minReqH);
+                } elseif (extension_loaded('gd')) {
+                    $this->process_gd($tmpFile, $outputFullPath, $origExt, $finalFilename, $minReqH);
                 }
 
                 // Проверка keep_if_larger
                 if (CMS_CONFIG['images']['keep_if_larger']) {
                     $origSize = filesize($tmpFile);
                     $webpSize = filesize($outputFullPath);
-        
+
                     if ($webpSize > $origSize) {
                         @unlink($outputFullPath);
                         $candidateName = $cleanFilename;
@@ -198,151 +97,86 @@ class upload extends base {
                         $finalFilename = $candidateName . '.' . $origExt;
                         $outputFullPath = paths::$upload_dir . '/' . $finalFilename;
                         $htmlSrc = $this->abs_path_to_web_url($outputFullPath);
-        
+
                         if (!@move_uploaded_file($tmpFile, $outputFullPath)) {
-                            @unlink($masterTmpPath);
                             $this->error('Не удалось сохранить оригинальный файл изображения');
                         }
                     }
                 }
-
-                // Читаем ограничения тега <img>
-                $docTemp = Dom\HTMLDocument::createFromFile(paths::$file_full_path, LIBXML_NOERROR);
-                $imgElTemp = $docTemp->getElementById($targetId);
-
-                $parseDim = function(?string $val): int {
-                    if ($val === null) return 0;
-                    $clean = strtolower(trim($val));
-                    if ($clean === '' || $clean === 'auto' || $clean === '0') return 0;
-                    return (int)$clean;
-                };
-
-                $minReqH = $imgElTemp ? $parseDim($imgElTemp->getAttribute('data-height')) : 0;
-
-                // Нарезка миниатюр
-                $thumbsDir = paths::$upload_dir . '/thumbs';
-                if (!is_dir($thumbsDir)) {
-                    @mkdir($thumbsDir, 0755, true);
-                }
-
-                $masterInfo = @getimagesize($masterTmpPath);
-                $masterWidth = $masterInfo[0] ?? 0;
-                $masterHeight = $masterInfo[1] ?? 0;
-
-                if ($masterWidth > 0 && $masterHeight > 0) {
-                    $baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
-                    $aspectRatio = $masterHeight / $masterWidth;
-
-                    foreach ($thumbSizes as $w) {
-                        if ($masterWidth <= $w) continue;
-
-                        $calculatedH = (int)round($w * $aspectRatio);
-
-                        if ($minReqH > 0 && $calculatedH < $minReqH) continue;
-
-                        $thumbFullPath = $thumbsDir . '/' . $baseFilename . '-' . $w . '.webp';
-                        $this->createWebpThumbnail($masterTmpPath, $thumbFullPath, 'webp', $targetQuality, $w);
-                    }
-                }
-
-                @unlink($masterTmpPath);
             }
 
             // ОБНОВЛЕНИЕ DOM В HTML
-            $doc = Dom\HTMLDocument::createFromFile(paths::$file_full_path, LIBXML_NOERROR);
-            $imgElement = $doc->getElementById($targetId);
+            // 1. Извлекаем старые пути ДО изменения для последующего удаления с диска
+            $oldSrc = trim($imgElement->getAttribute('src') ?? '');
+            $oldSrcSet = trim($imgElement->getAttribute('srcset') ?? '');
+            $oldFilesToDelete = [];
 
-            if ($imgElement) {
-                // 1. Извлекаем старые пути ДО изменения атрибутов для последующего точечного удаления
-                $oldSrc = trim($imgElement->getAttribute('src') ?? '');
-                $oldSrcSet = trim($imgElement->getAttribute('srcset') ?? '');
-                $oldFilesToDelete = [];
-
-                if ($oldSrc) {
-                    $p = $this->resolve_local_image_path($oldSrc);
-                    if ($p) $oldFilesToDelete[] = $p;
-                }
-
-                if ($oldSrcSet) {
-                    $srcSetEntries = explode(',', $oldSrcSet);
-                    foreach ($srcSetEntries as $entry) {
-                        $parts = preg_split('/\s+/', trim($entry));
-                        if (!empty($parts[0])) {
-                            $p = $this->resolve_local_image_path($parts[0]);
-                            if ($p) $oldFilesToDelete[] = $p;
-                        }
-                    }
-                }
-                $oldFilesToDelete = array_unique($oldFilesToDelete);
-
-                // 2. Устанавливаем новый src
-                $imgElement->setAttribute('src', $htmlSrc);
-
-                // 3. Собираем новый srcset ТОЛЬКО если это не SVG/GIF
-                $newSrcSetEntries = [];
-                if (!$isPassthrough) {
-                    $parseDim = function(?string $val): int {
-                        if ($val === null) return 0;
-                        $clean = strtolower(trim($val));
-                        if ($clean === '' || $clean === 'auto' || $clean === '0') return 0;
-                        return (int)$clean;
-                    };
-
-                    $minReqW = $parseDim($imgElement->getAttribute('data-width'));
-                    $minReqH = $parseDim($imgElement->getAttribute('data-height'));
-
-                    $baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
-                    $aspectRatio = (isset($masterWidth) && $masterWidth > 0) ? ($masterHeight / $masterWidth) : 0;
-                    $thumbsDir = paths::$upload_dir . '/thumbs';
-
-                    foreach ($thumbSizes as $w) {
-                        $thumbFullPath = $thumbsDir . '/' . $baseFilename . '-' . $w . '.webp';
-
-                        if (file_exists($thumbFullPath)) {
-                            $calculatedH = (int)round($w * $aspectRatio);
-
-                            if ($minReqW > 0 && $w < $minReqW) continue;
-                            if ($minReqH > 0 && $calculatedH < $minReqH) continue;
-
-                            $thumbWebUrl = $this->abs_path_to_web_url($thumbFullPath);
-                            $newSrcSetEntries[] = $thumbWebUrl . " {$w}w";
-                        }
-                    }
-
-                    $mainImgInfo = @getimagesize($outputFullPath);
-                    if ($mainImgInfo && !empty($mainImgInfo[0])) {
-                        $mainWidth = $mainImgInfo[0];
-                        $newSrcSetEntries[] = $htmlSrc . " {$mainWidth}w";
-                    }
-
-                    if (!empty($newSrcSetEntries)) {
-                        $imgElement->setAttribute('srcset', implode(', ', $newSrcSetEntries));
-                        $imgElement->setAttribute('sizes', 'auto');
-                    }
-                    $imgElement->setAttribute('loading', 'lazy');
-                } else {
-                    // Для SVG и GIF очищаем srcset и sizes
-                    $imgElement->removeAttribute('srcset');
-                    $imgElement->removeAttribute('sizes');
-                }
-
-                // 4. Безопасное удаление старых файлов (удаляем строго то, что было прописано в теге до загрузки)
-                foreach ($oldFilesToDelete as $oldFilePath) {
-                    if ($oldFilePath && $oldFilePath !== $outputFullPath && file_exists($oldFilePath)) {
-                        @unlink($oldFilePath);
-                        $this->log("Удален старый заменённый файл из src/srcset: '{$oldFilePath}'", 'uploads.txt');
-                    }
-                }
-
-                $doc->saveHtmlFile(paths::$file_full_path);
-                
-                $this->success([
-                    'relative_path' => $htmlSrc,
-                    'srcset'        => implode(', ', $newSrcSetEntries)
-                ]);
-            } else {
-                $this->error('Элемент #' . $targetId . ' не найден в HTML');
+            if ($oldSrc) {
+                $p = $this->resolve_local_image_path($oldSrc);
+                if ($p) $oldFilesToDelete[] = $p;
             }
+
+            if ($oldSrcSet) {
+                $srcSetEntries = explode(',', $oldSrcSet);
+                foreach ($srcSetEntries as $entry) {
+                    $parts = preg_split('/\s+/', trim($entry));
+                    if (!empty($parts[0])) {
+                        $p = $this->resolve_local_image_path($parts[0]);
+                        if ($p) $oldFilesToDelete[] = $p;
+                    }
+                }
+            }
+            $oldFilesToDelete = array_unique($oldFilesToDelete);
+
+            // 2. Устанавливаем новый src
+            $imgElement->setAttribute('src', $htmlSrc);
+
+            // 3. Собираем новый srcset ТОЛЬКО если это не SVG/GIF
+            $newSrcSetEntries = [];
+            if (!$isPassthrough) {
+                $baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
+                $thumbsDir = paths::$upload_dir . '/thumbs';
+
+                foreach ((CMS_CONFIG['images']['thumb_sizes'] ?? [600, 1200]) as $w) {
+                    $thumbFullPath = $thumbsDir . '/' . $baseFilename . '-' . $w . '.webp';
+
+                    if (file_exists($thumbFullPath)) {
+                        $thumbWebUrl = $this->abs_path_to_web_url($thumbFullPath);
+                        $newSrcSetEntries[] = $thumbWebUrl . " {$w}w";
+                    }
+                }
+
+                $mainImgInfo = @getimagesize($outputFullPath);
+                if ($mainImgInfo && !empty($mainImgInfo[0])) {
+                    $mainWidth = $mainImgInfo[0];
+                    $newSrcSetEntries[] = $htmlSrc . " {$mainWidth}w";
+                }
+
+                if (!empty($newSrcSetEntries)) {
+                    $imgElement->setAttribute('srcset', implode(', ', $newSrcSetEntries));
+                    $imgElement->setAttribute('sizes', 'auto');
+                }
+                $imgElement->setAttribute('loading', 'lazy');
+            } else {
+                $imgElement->removeAttribute('srcset');
+                $imgElement->removeAttribute('sizes');
+            }
+
+            // 4. Безопасное удаление старых замененных файлов
+            foreach ($oldFilesToDelete as $oldFilePath) {
+                if ($oldFilePath && $oldFilePath !== $outputFullPath && file_exists($oldFilePath)) {
+                    @unlink($oldFilePath);
+                    $this->log("Удален старый заменённый файл из src/srcset: '{$oldFilePath}'", 'uploads.txt');
+                }
+            }
+
+            // Сохраняем обновленный HTML файл
+            $doc->saveHtmlFile(paths::$file_full_path);
+
+            $this->success([
+                'relative_path' => $htmlSrc,
+                'srcset'        => implode(', ', $newSrcSetEntries)
+            ]);
 
         } catch (Throwable $e) {
             $this->log("PHP Exception при upload_single_image: " . $e->getMessage(), 'uploads.txt');
@@ -350,14 +184,156 @@ class upload extends base {
         }
     }
 
-    // ХЕЛПЕР 1: Превращает абсолютный системный путь в веб-URL (например: /var/www/site/uploads/1.jpg -> /uploads/1.jpg)
+    // Обработка через GD
+    private function process_gd(string $sourcePath, string $mainOutputPath, string $origExt, string $finalFilename, int $minReqH = 0): void {
+
+        $maxWidth  = (int)(CMS_CONFIG['images']['max_width'] ?? 1920);
+        $maxHeight = (int)(CMS_CONFIG['images']['max_height'] ?? 1920);
+
+        $srcImage = match($origExt) {
+            'jpg', 'jpeg' => @imagecreatefromjpeg($sourcePath),
+            'png'         => @imagecreatefrompng($sourcePath),
+            'webp'        => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : null,
+            'bmp'         => function_exists('imagecreatefrombmp') ? @imagecreatefrombmp($sourcePath) : null,
+            'avif'        => function_exists('imagecreatefromavif') ? @imagecreatefromavif($sourcePath) : null,
+            default       => null
+        };
+
+        if (!$srcImage) {
+            $this->error('Неразрешённый формат файла: *.'.$origExt);
+        }
+
+        $origW = imagesx($srcImage);
+        $origH = imagesy($srcImage);
+
+        // 1. Уменьшаем до лимитов max_width / max_height
+        if ($origW > $maxWidth || $origH > $maxHeight) {
+            $ratio = min($maxWidth / $origW, $maxHeight / $origH);
+            $newW = (int)round($origW * $ratio);
+            $newH = (int)round($origH * $ratio);
+
+            $masterImage = imagecreatetruecolor($newW, $newH);
+            if (in_array($origExt, ['png', 'webp'], true)) {
+                imagealphablending($masterImage, false);
+                imagesavealpha($masterImage, true);
+            }
+            imagecopyresampled($masterImage, $srcImage, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
+
+            unset($srcImage);
+        } else {
+            $masterImage = $srcImage;
+        }
+
+        // 2. Сохраняем основной WebP файл
+        $saved = @imagewebp($masterImage, $mainOutputPath, (int)(CMS_CONFIG['images']['quality'] ?? 80));
+        if (!$saved) {
+            unset($masterImage);
+            gc_collect_cycles();
+            $this->error('Ошибка при сохранении WebP-файла.');
+        }
+
+        // 3. Нарезаем миниатюры прямо из $masterImage
+        $masterW = imagesx($masterImage);
+        $masterH = imagesy($masterImage);
+        $baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
+        $thumbsDir = paths::$upload_dir . '/thumbs';
+
+        if (!is_dir($thumbsDir)) {
+            @mkdir($thumbsDir, 0755, true);
+        }
+
+        foreach ((CMS_CONFIG['images']['thumb_sizes'] ?? [600, 1200]) as $tw) {
+            if ($masterW <= $tw) continue;
+
+            $ratio = $tw / $masterW;
+            $thH = (int)round($masterH * $ratio);
+
+            // Проверка минимальной высоты для тега <img>
+            if ($minReqH > 0 && $thH < $minReqH) continue;
+
+            $thumbImage = imagecreatetruecolor($tw, $thH);
+            imagealphablending($thumbImage, false);
+            imagesavealpha($thumbImage, true);
+            imagecopyresampled($thumbImage, $masterImage, 0, 0, 0, 0, $tw, $thH, $masterW, $masterH);
+
+            $thumbPath = $thumbsDir . '/' . $baseFilename . '-' . $tw . '.webp';
+            @imagewebp($thumbImage, $thumbPath, (int)(CMS_CONFIG['images']['quality'] ?? 80));
+
+            unset($thumbImage);
+        }
+
+        unset($masterImage);
+        gc_collect_cycles();
+    }
+
+    // Обработка через Imagick
+    private function process_imagick(string $sourcePath, string $mainOutputPath, string $finalFilename, int $minReqH = 0): void {
+        try {
+            $maxWidth  = (int)(CMS_CONFIG['images']['max_width'] ?? 1920);
+            $maxHeight = (int)(CMS_CONFIG['images']['max_height'] ?? 1920);
+
+            $image = new Imagick($sourcePath);
+            $origW = $image->getImageWidth();
+            $origH = $image->getImageHeight();
+
+            if ($origW > $maxWidth || $origH > $maxHeight) {
+                $ratio = min($maxWidth / $origW, $maxHeight / $origH);
+                $image->resizeImage((int)round($origW * $ratio), (int)round($origH * $ratio), Imagick::FILTER_LANCZOS, 1);
+            }
+
+            $image->setImageFormat('webp');
+            $image->setImageCompressionQuality((int)(CMS_CONFIG['images']['quality'] ?? 80));
+            $image->writeImage($mainOutputPath);
+
+            // Нарезка миниатюр
+            $masterW = $image->getImageWidth();
+            $masterH = $image->getImageHeight();
+            $baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
+            $thumbsDir = paths::$upload_dir . '/thumbs';
+
+            if (!is_dir($thumbsDir)) {
+                @mkdir($thumbsDir, 0755, true);
+            }
+
+            foreach ((CMS_CONFIG['images']['thumb_sizes'] ?? [600, 1200]) as $tw) {
+                if ($masterW <= $tw) continue;
+
+                $ratio = $tw / $masterW;
+                $thH = (int)round($masterH * $ratio);
+
+                // Проверка минимальной высоты для тега <img>
+                if ($minReqH > 0 && $thH < $minReqH) continue;
+
+                $thumb = clone $image;
+                $thumb->resizeImage($tw, $thH, Imagick::FILTER_LANCZOS, 1);
+                
+                $thumbPath = $thumbsDir . '/' . $baseFilename . '-' . $tw . '.webp';
+                $thumb->writeImage($thumbPath);
+                
+                $thumb->clear();
+                $thumb->destroy();
+                unset($thumb);
+            }
+
+            $image->clear();
+            $image->destroy();
+            unset($image);
+
+            if (!file_exists($mainOutputPath)) {
+                $this->error('Файл не загружен: '.$mainOutputPath);
+            }
+        } catch (Throwable $e) {
+            $this->error("Imagick Exception: " . $e->getMessage());
+        }
+    }
+
+    // ХЕЛПЕР 1: Превращает абсолютный системный путь в веб-URL
     private function abs_path_to_web_url(string $absPath): string {
         $relPath = ltrim(str_replace(paths::$site_root_dir, '', $absPath), '/\\');
         return '/' . str_replace('\\', '/', $relPath);
     }
 
-    // ХЕЛПЕР 2: Переводит любой URL (включая ссылки с доминами) в локальный относительный путь файла от корня
-    // Возвращает null, если ссылка ведет на внешний сторонний домен.
+    // ХЕЛПЕР 2: Переводит любой URL в локальный относительный путь файла от корня
     private function url_to_local_rel_path(string $url): ?string {
         $url = trim($url);
         if (!$url) return null;
@@ -381,7 +357,7 @@ class upload extends base {
         return ltrim($path, '/\\');
     }
 
-    // ХЕЛПЕР 3: Проверка и резолв локального физического пути картинки по её src (для последующего удаления с диска)
+    // ХЕЛПЕР 3: Проверка и резолв локального физического пути картинки по её src
     private function resolve_local_image_path(string $src): ?string {
         $cleanRelPath = $this->url_to_local_rel_path($src);
         if (!$cleanRelPath) return null;
