@@ -7,7 +7,7 @@ if (!defined('QUILLY_INIT')) {
 
 return [
     // Режим отладки
-    'debug' => false,
+    'debug' => true,
 
     // Директория хранения файлов отладочных логов (относительно корня сайта)
     'debug_dir' => '/debug',

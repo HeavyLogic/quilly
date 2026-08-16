@@ -312,7 +312,6 @@ import { sendAjax, on } from './common.js';
             const revsPop = document.getElementById('cms-revisions-pop');
         
             // Активируем глобальное состояние AJAX загрузки
-            document.body.classList.add('cms-ajax-loading');
             saveBtn.setAttribute('disabled', 'true');
             revsPop?.classList.remove('active');
         
@@ -370,16 +369,19 @@ import { sendAjax, on } from './common.js';
                 
                         let isUploadError = false;
         
-                        await sendAjax(imgFormData, () => {
-                            const pct = Math.round(((i + 1) / total) * 100);
-                            if (progressFill) progressFill.style.width = pct + '%';
-                            if (progressLabel) progressLabel.innerText = `Загружено (${i + 1}/${total})`;
-                        }, () => {
-                            progressBar?.classList.remove('active');
-                            document.body.classList.remove('cms-ajax-loading');
-                            saveBtn.removeAttribute('disabled');
-                            isUploadError = true;
-                        });
+                        await sendAjax(
+                            imgFormData,
+                            () => {
+                                const pct = Math.round(((i + 1) / total) * 100);
+                                if (progressFill) progressFill.style.width = pct + '%';
+                                if (progressLabel) progressLabel.innerText = `Загружено (${i + 1}/${total})`;
+                            }, () => {
+                                progressBar?.classList.remove('active');
+                                saveBtn.removeAttribute('disabled');
+                                isUploadError = true;
+                            },
+                            true
+                        );
                 
                         if (isUploadError) {
                             // Выход из цикла
@@ -391,7 +393,6 @@ import { sendAjax, on } from './common.js';
                 }
         
                 // ШАГ 3: Завершение (выполняется строго внутри колбэка успеха)
-                document.body.classList.remove('cms-ajax-loading');
                 editedElements.clear();
                 stagedImageFiles.clear();
                 document.querySelectorAll('.editable.edited').forEach(el => el.classList.remove('edited'));
@@ -409,11 +410,6 @@ import { sendAjax, on } from './common.js';
                     currentBtnRevs.outerHTML = result.revisions_button;
                 }
         
-            }, () => {
-                // Если первое сохранение текста завершилось ошибкой
-                // TODO: вот этот cms-ajax-loading - внутрь common
-                document.body.classList.remove('cms-ajax-loading');
-                saveBtn.removeAttribute('disabled');
             });
         });
 

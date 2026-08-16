@@ -148,8 +148,8 @@ class upload extends base {
             $finalFilename = $candidateName . '.' . $format;
             $outputFullPath = paths::$upload_dir . '/' . $finalFilename;
             
-            // Веб-путь относительного корня сайта для вставки в HTML src
-            $htmlSrc = '/' . ltrim(str_replace(paths::$site_root_dir, '', $outputFullPath), '/\\');
+            // Веб-ссылка для вставки в HTML src
+            $htmlSrc = $this->abs_path_to_web_url($outputFullPath);
 
             $srcSetEntries = [];
 
@@ -197,7 +197,7 @@ class upload extends base {
                         }
                         $finalFilename = $candidateName . '.' . $origExt;
                         $outputFullPath = paths::$upload_dir . '/' . $finalFilename;
-                        $htmlSrc = '/' . ltrim(str_replace(paths::$site_root_dir, '', $outputFullPath), '/\\');
+                        $htmlSrc = $this->abs_path_to_web_url($outputFullPath);
         
                         if (!@move_uploaded_file($tmpFile, $outputFullPath)) {
                             @unlink($masterTmpPath);
@@ -304,7 +304,7 @@ class upload extends base {
                             if ($minReqW > 0 && $w < $minReqW) continue;
                             if ($minReqH > 0 && $calculatedH < $minReqH) continue;
 
-                            $thumbWebUrl = '/' . ltrim(str_replace(paths::$site_root_dir, '', $thumbFullPath), '/\\');
+                            $thumbWebUrl = $this->abs_path_to_web_url($thumbFullPath);
                             $newSrcSetEntries[] = $thumbWebUrl . " {$w}w";
                         }
                     }
@@ -350,31 +350,46 @@ class upload extends base {
         }
     }
 
-    // Проверка и резолв локального физического пути картинки по её src (для последующего удаления с диска)
+    // ХЕЛПЕР 1: Превращает абсолютный системный путь в веб-URL (например: /var/www/site/uploads/1.jpg -> /uploads/1.jpg)
+    private function abs_path_to_web_url(string $absPath): string {
+        $relPath = ltrim(str_replace(paths::$site_root_dir, '', $absPath), '/\\');
+        return '/' . str_replace('\\', '/', $relPath);
+    }
+
+    // ХЕЛПЕР 2: Переводит любой URL (включая ссылки с доминами) в локальный относительный путь файла от корня
+    // Возвращает null, если ссылка ведет на внешний сторонний домен.
+    private function url_to_local_rel_path(string $url): ?string {
+        $url = trim($url);
+        if (!$url) return null;
+
+        $targetHost = parse_url($url, PHP_URL_HOST);
+
+        // Если в URL указан домен (например, http://site.com/img.jpg или //site.com/img.jpg)
+        if ($targetHost !== null) {
+            $currentHost = parse_url(paths::$post_url, PHP_URL_HOST);
+
+            // Если хосты не совпадают без учета регистра и протокола — это сторонний сайт (Unsplash и т.д.)
+            if ($currentHost && strcasecmp($targetHost, $currentHost) !== 0) {
+                return null;
+            }
+        }
+
+        // Извлекаем путь из URL (без хоста, схемы и GET-параметров ?v=123)
+        $path = parse_url($url, PHP_URL_PATH);
+        if (!$path) return null;
+
+        return ltrim($path, '/\\');
+    }
+
+    // ХЕЛПЕР 3: Проверка и резолв локального физического пути картинки по её src (для последующего удаления с диска)
     private function resolve_local_image_path(string $src): ?string {
-        $src = trim($src);
-        if (!$src) return null;
+        $cleanRelPath = $this->url_to_local_rel_path($src);
+        if (!$cleanRelPath) return null;
 
-        $url = $_POST['url'] ?? '';
-        $siteDomain = parse_url($url, PHP_URL_HOST) ?? '';
-        $siteScheme = parse_url($url, PHP_URL_SCHEME) ?? 'http';
-        $siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
+        $fullPath = paths::$site_root_dir . '/' . $cleanRelPath;
 
-        // Если в src зашит абсолютный URL текущего сайта — срезаем домен
-        if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
-            $src = substr($src, strlen($siteBaseUrl));
-        }
-
-        // Если ссылка на сторонний ресурс — игнорируем
-        if (preg_match('#^(https?:)?//#i', $src)) {
-            return null;
-        }
-
-        $cleanRelPath = ltrim(parse_url($src, PHP_URL_PATH) ?? $src, '/\\');
-        $image_full_path = paths::$site_root_dir . '/' . $cleanRelPath;
-
-        if (file_exists($image_full_path) && is_file($image_full_path)) {
-            return $image_full_path;
+        if (file_exists($fullPath) && is_file($fullPath)) {
+            return $fullPath;
         }
 
         return null;

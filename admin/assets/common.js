@@ -1,8 +1,13 @@
-let ajaxing = false;
+export async function sendAjax(data, successFunc, failFunc, force=false) {
+    if (!data) {
+        return false;
+    }
 
-export async function sendAjax(data, successFunc, failFunc) {
-    if (!data || ajaxing) return false;
-    ajaxing = true;
+    const ajaxing = document.body.classList.contains('cms-ajax-loading');
+    if (!force && ajaxing) {
+        return false;
+    }
+    document.body.classList.add('cms-ajax-loading');
 
     const isFormData = data instanceof FormData;
     const body = isFormData ? data : new URLSearchParams(data);
@@ -55,7 +60,7 @@ export async function sendAjax(data, successFunc, failFunc) {
         modal('0: ' + (err.message || 'Network error'));
         return false;
     } finally {
-        ajaxing = false;
+        document.body.classList.remove('cms-ajax-loading');
     }
 }
 

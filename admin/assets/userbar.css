@@ -500,7 +500,7 @@ body.cms-ajax-loading #cms-toolbar {
 /* Состояние во время AJAX-загрузки */
 body.cms-ajax-loading .cms-btn-save {
     opacity: 0.7;
-    cursor: not-allowed !important;
+    cursor: wait !important;
     pointer-events: none !important;
 }
 
