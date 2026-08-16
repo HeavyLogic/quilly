@@ -196,17 +196,18 @@ class revisions extends base {
             $currentDoc = Dom\HTMLDocument::createFromFile(paths::$file_full_path, LIBXML_NOERROR);
             $currentImages = $this->getEditableImagesPaths($currentDoc);
 
-            // 3. Безопасно удаляем с диска текущий живой HTML и его живые картинки
-            @unlink(paths::$file_full_path);
-            foreach ($currentImages as $relPath => $absPath) {
-                if (file_exists($absPath)) {
-                    @unlink($absPath);
-                }
-            }
-
-            // 4. Распаковываем ZIP-архив целевой ревизии в корень сайта
+            // 3. Распаковываем ZIP-архив целевой ревизии в корень сайта
             $zip = new ZipArchive();
             if ($zip->open($revision_zip_path) === true) {
+
+                // Удаляем с диска текущий живой HTML и его живые картинки
+                @unlink(paths::$file_full_path);
+                foreach ($currentImages as $relPath => $absPath) {
+                    if (file_exists($absPath)) {
+                        @unlink($absPath);
+                    }
+                }
+
                 $zip->extractTo(paths::$site_root_dir);
                 $zip->close();
 
