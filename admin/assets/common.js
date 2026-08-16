@@ -79,7 +79,6 @@ export function modal(htmlContent) {
             width: 100vw;
             height: 100vh;
             background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(3px);
             display: flex;
             justify-content: center;
             align-items: center;

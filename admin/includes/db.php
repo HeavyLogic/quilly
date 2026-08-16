@@ -35,20 +35,19 @@ class db extends base {
      */
     private function connect_db() {
         // Создаем папку, если её нет
-        $dirPath = dirname(CMS_CONFIG['db_path']);
-        if (!file_exists($dirPath)) {
-            mkdir($dirPath, 0755, true);
+        if (!file_exists(paths::$db_full_dir)) {
+            mkdir(paths::$db_full_dir, 0755, true);
         }
 
         // Авто-защита базы для Apache
-        $htaccessPath = $dirPath . '/.htaccess';
+        $htaccessPath = paths::$db_full_dir . '/.htaccess';
         if (!file_exists($htaccessPath)) {
             file_put_contents($htaccessPath, "Require all denied\n");
         }
 
         // Подключаемся к SQLite через PDO
         try {
-            $pdo = new PDO("sqlite:" . CMS_CONFIG['db_path']);
+            $pdo = new PDO("sqlite:" . paths::$db_full_path);
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 

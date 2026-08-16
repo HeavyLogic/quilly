@@ -5,30 +5,29 @@ if (!defined('QUILLY_INIT')) {
     exit('Access denied');
 }
 
-// Суперглобальная константа конфигурации
-define('CMS_CONFIG', [
-    // Режим отладки (запись в debug_dir)
+return [
+    // Режим отладки
     'debug' => false,
 
-    // Директория хранения файлов отладочных логов
-    'debug_dir' => rtrim(__DIR__ . '/../debug', '/\\'),
+    // Директория хранения файлов отладочных логов (относительно корня сайта)
+    'debug_dir' => 'debug',
 
     // Путь к файлу базы данных SQLite
-    'db_path' => __DIR__ . '/../restricted/users.sqlite',
+    'db_path' => 'restricted/users.sqlite',
 
-    // Путь к директории хранения ZIP-ревизий
-    'revisions_dir' => rtrim(__DIR__ . '/../restricted/revisions', '/\\'),
+    // Директория хранения ZIP-ревизий
+    'revisions_dir' => 'restricted/revisions',
 
-    // Максимальное число хранимых ревизий для страницы (0 - отключить создание новых ревизий)
+    // Максимальное число хранимых ревизий для страницы (0 - отключить)
     'max_revisions' => 10,
 
     // Настройки обработки и конвертации изображений
     'images' => [
-        'quality'    => 80,
+        'quality'        => 80,
         'keep_if_larger' => true,
-        'max_width'  => 1920,
-        'max_height' => 1920,
+        'max_width'      => 1920,
+        'max_height'     => 1920,
         'thumb_sizes'    => [600, 1200],
-        'upload_dir' => trim('uploads', '/\\'), // Папка относительно корня сайта
+        'upload_dir'     => 'uploads', // Папка относительно корня сайта
     ],
-]);
+];

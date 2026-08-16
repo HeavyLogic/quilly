@@ -68,7 +68,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 login: loginForm.querySelector('[name="login"]').value,
                 password: loginForm.querySelector('[name="password"]').value
             }, (res) => {
-                window.location.href = res.redirect || '/admin/';
+                if (res && res.redirect) {
+                    window.location.href = res.redirect;
+                } else {
+                    window.location.reload;
+                }
             });
         });
     }
