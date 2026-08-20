@@ -36,7 +36,7 @@ class db extends base {
 	private function connect_db() {
 		// Создаем папку, если её нет
 		if (!file_exists(paths::$db_full_dir)) {
-			mkdir(paths::$db_full_dir, 2755, true);
+			mkdir(paths::$db_full_dir, 2775, true);
 		}
 
 		// Авто-защита базы для Apache

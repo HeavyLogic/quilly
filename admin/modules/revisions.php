@@ -71,7 +71,7 @@ class revisions extends base {
 		$dateStr = date('Y-m-d_H-i-s', $lastModTime);
 
 		if (!is_dir(paths::$revisions_folder_path)) {
-			@mkdir(paths::$revisions_folder_path, 2755, true);
+			@mkdir(paths::$revisions_folder_path, 2775, true);
 		}
 
 		$zipPath = paths::$revisions_folder_path . '/' . $dateStr . '.zip';
