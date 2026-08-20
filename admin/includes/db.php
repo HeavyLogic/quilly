@@ -78,9 +78,16 @@ class db extends base {
 			$stmt->execute((array) $params);
 			return $stmt;
 		} catch (PDOException $e) {
-			$this->error("Ошибка базы данных.");
 			// Чувствительные данные:
-			$this->log($e->getMessage() . " [SQL: {$sql}]", 'db.txt');
+			$sensitive = $e->getMessage() . " [SQL: {$sql}]";
+
+			if (auth::is_admin()) {
+				$this->error("Ошибка базы данных: ".$sensitive);
+			} else {
+				$this->error("Ошибка базы данных.");
+			}
+			
+			$this->log($sensitive, 'db.txt');
 			return false;
 		}
 	}
