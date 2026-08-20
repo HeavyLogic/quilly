@@ -27,7 +27,7 @@ class base {
 			return;
 
 		if (!is_dir(paths::$debug_dir)) {
-			@mkdir(paths::$debug_dir, 0755, true);
+			@mkdir(paths::$debug_dir, 2755, true);
 		}
 
 		$logFile = paths::$debug_dir . '/' . $filename;
