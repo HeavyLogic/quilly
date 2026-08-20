@@ -1,48 +1,241 @@
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-body { background: #f4f5f7; color: #333; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
 
-.container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; max-width: 800px; }
-.container.login-mode { width: max-content; min-width: 320px; }
+body {
+	background: #f4f5f7;
+	color: #333;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: 100vh;
+	padding: 20px;
+	font-family: system-ui, -apple-system, sans-serif;
+	font-size: 18px;
+}
 
-h2 { margin-bottom: 20px; font-size: 20px; display: flex; justify-content: space-between; align-items: center; text-align: center; }
+.container {
+	width: 100%;
+	max-width: 800px;
+}
 
-.alert-error { display: none; background: #ffebe9; color: #d1242f; border: 1px solid rgba(255, 129, 130, 0.4); padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 15px; text-align: center; }
-.alert-error.visible { display: block; }
 
-input[type="text"], input[type="password"], select { 
-	width: 100%; 
-	padding: 10px; 
-	border: 1px solid #ddd; 
-	border-radius: 6px; 
-	font-size: 14px; 
-	outline: none; 
-	margin-bottom: 12px; 
+.container.login-mode {
+	width: max-content;
+	min-width: 320px;
+	max-width: 400px;
+}
+
+.adm-card {
+	background: #fff;
+	padding: 30px;
+	border-radius: 8px;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.go-back {
+	display: block;
+	width: max-content;
+	margin: 0 auto;
+	margin-top: 15px;
+	text-decoration: none;
+	color: inherit;
+	font-size: 0.85em;
+	opacity: 0.6;
+}
+
+.go-back:hover {
+	opacity: 1;
+}
+
+header {
+	margin-bottom: 20px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	text-align: center;
+}
+
+h2 {
+	font-size: 1.1em;
+}
+
+.alert-error {
+	display: none;
+	background: #ffebe9;
+	color: #d1242f;
+	border: 1px solid rgba(255, 129, 130, 0.4);
+	padding: 10px;
+	border-radius: 6px;
+	font-size: 0.8em;
+	margin-bottom: 15px;
+	text-align: center;
+}
+
+.alert-error.visible {
+	display: block;
+}
+
+input[type="text"],
+input[type="password"],
+select {
+	width: 100%;
+	padding: 4px 6px;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	font-size: inherit;
+	font-family: inherit;
+	outline: none;
+	margin-bottom: 12px;
 	background: #fff;
 }
-input:focus, select:focus { border-color: #0066cc; }
 
-button { background: #0066cc; color: #fff; border: none; padding: 10px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
-button:hover { background: #0052a3; }
-.btn-delete { background: #e63946; padding: 5px 10px; font-size: 12px; }
-.btn-delete:hover { background: #c1121f; }
-.btn-logout { background: #6c757d; font-size: 12px; }
+input:focus,
+select:focus {
+	border-color: #0066cc;
+}
 
-.table-header, .user-row { display: grid; grid-template-columns: 1fr 1fr 1.5fr 90px; gap: 10px; align-items: center; }
-.table-header { font-weight: bold; background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 5px; font-size: 13px; color: #666; }
-.user-row { padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 14px; min-height: 45px; }
-.user-row:hover { background: #fafafa; }
+button {
+	background: #0066cc;
+	color: #fff;
+	border: none;
+	padding: 10px 14px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 0.8em;
+	font-weight: 500;
+	width: max-content;
+	white-space: nowrap;
+}
 
-.cell { word-break: break-all; }
-.editable { cursor: pointer; padding: 4px 6px; border-radius: 4px; border: 1px transparent dashed; min-height: 28px; }
-.editable:hover { border-color: #ccc; background: #fffbe6; }
-.cell select, .cell input { margin: 0; padding: 4px 6px; }
+button:hover {
+	background: #0052a3;
+}
 
-.empty-msg { text-align: center; color: #888; padding: 20px; }
-.controls { margin-top: 20px; }
+.btn-delete {
+	background: #e63946;
+	padding: 7px 10px;
+	font-size: 0.8em;
+}
 
-.modal-bg { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); justify-content: center; align-items: center; }
-.modal { background: #fff; padding: 20px; border-radius: 8px; width: 300px; }
-.modal h3 { margin-bottom: 15px; font-size: 16px; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
-.btn-cancel { background: #ccc; color: #333; }
-.login-box { min-width: 280px; }
+.btn-delete:hover {
+	background: #c1121f;
+}
+
+.btn-logout {
+	background: #6c757d;
+	font-size: 0.8em;
+}
+
+.table-header,
+.user-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1.5fr 90px;
+	gap: 10px;
+	align-items: center;
+}
+
+.table-header {
+	font-weight: bold;
+	background: #f8f9fa;
+	padding: 10px;
+	border-radius: 6px;
+	margin-bottom: 5px;
+	font-size: 0.8em;
+	color: #666;
+}
+
+.user-row {
+	padding: 8px 10px;
+	border-bottom: 1px solid #eee;
+	min-height: 45px;
+}
+
+.user-row:hover {
+	background: #fafafa;
+}
+
+.cell {
+	word-break: break-all;
+}
+
+.editable {
+	cursor: pointer;
+	padding: 4px 6px;
+	border-radius: 4px;
+	border: 1px transparent dashed;
+	min-height: 28px;
+}
+
+.editable:hover {
+	border-color: #ccc;
+	background: #fffbe6;
+}
+
+.cell select,
+.cell input {
+	margin: 0;
+}
+
+.empty-msg {
+	text-align: center;
+	color: #888;
+	padding: 20px;
+}
+
+.controls {
+	margin-top: 20px;
+}
+
+.modal-bg {
+	display: none;
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.4);
+	justify-content: center;
+	align-items: center;
+}
+
+.modal {
+	background: #fff;
+	padding: 20px;
+	border-radius: 8px;
+	width: 300px;
+}
+
+.modal h3 {
+	margin-bottom: 15px;
+	font-size: 16px;
+}
+
+.modal-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.btn-cancel {
+	background: #ccc;
+	color: #333;
+}
+
+.login-box {
+	min-width: 280px;
+}
+
+.login-box input {
+	padding: 10px;
+}
+
+.login-box button {
+	padding: 10px;
+	width: 100%;
+	margin-top: 12px;
+	font-size: 0.9em;
+}

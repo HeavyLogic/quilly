@@ -1,614 +1,629 @@
 :root {
-    --cms-popup-gap: 12px; /* Единый вертикальный отступ для всех всплывающих блоков над баром */
+	--cms-popup-gap: 7px;
+	/* Единый вертикальный отступ для всех всплывающих блоков над баром */
 }
 
 /* ===================================================
    ОБЩИЙ КЛАСС ТЁМНОГО МАТОВОГО СТЕКЛА (DARK GLASS)
    =================================================== */
 .cms-glass-card {
-    background: rgba(20, 20, 20, 0.65); /* Тёмное матовое стекло */
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 14px;
-    color: #ffffff; /* Белый текст читается НА ЛЮБОМ фоне */
-    user-select: none;
-    z-index: 999999;
+	background: rgba(20, 20, 20, 0.65);
+	/* Тёмное матовое стекло */
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+	font-family: system-ui, -apple-system, sans-serif;
+	font-size: 14px;
+	color: #ffffff;
+	/* Белый текст читается НА ЛЮБОМ фоне */
+	user-select: none;
+	z-index: 999999;
 }
 
 /* Прозрачный родительский контейнер позиционирования (без своего размытия!) */
 #cms-userbar-container {
-    position: fixed;
-    bottom: 15px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 999999;
-    pointer-events: none;
-    width: max-content;
+	position: fixed;
+	bottom: 15px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 999999;
+	pointer-events: none;
+	width: max-content;
 }
 
 /* 1. Позиция центрального бара управления */
 #cms-userbar {
-    position: relative;
-    border-radius: 50px;
-    padding: 8px 18px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    pointer-events: auto;
+	position: relative;
+	border-radius: 50px;
+	padding: 8px 18px;
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	pointer-events: auto;
 }
 
 /* 1.1. Выплывающий тулбар форматирования */
 #cms-toolbar {
-    position: absolute;
-    bottom: calc(100% + var(--cms-popup-gap));
-    left: 50%;
-    transform: translateX(-50%) translateY(10px);
-    opacity: 0;
-    pointer-events: none;
-    border-radius: 30px;
-    padding: 6px 12px;
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+	position: absolute;
+	bottom: calc(100% + var(--cms-popup-gap));
+	left: 50%;
+	transform: translateX(-50%) translateY(10px);
+	opacity: 0;
+	pointer-events: none;
+	border-radius: 30px;
+	padding: 6px 12px;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 /* Автоматически показываем тулбар, если на странице есть активный элемент */
 body.cms-edit-mode:has(.editable.cms-active-target) #cms-toolbar {
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    transform: translateX(-50%) translateY(0);
+	opacity: 1 !important;
+	pointer-events: auto !important;
+	transform: translateX(-50%) translateY(0);
 }
 
 /* Принудительно скрываем тулбар во время AJAX-загрузки */
 body.cms-edit-mode:has(#cms-progress-bar.active) #cms-toolbar,
 body.cms-ajax-loading #cms-toolbar {
-    opacity: 0 !important;
-    pointer-events: none !important;
-    transform: translateX(-50%) translateY(10px) !important;
+	opacity: 0 !important;
+	pointer-events: none !important;
+	transform: translateX(-50%) translateY(10px) !important;
 }
 
 /* 1.2. Блок индикатора поочередной загрузки */
 #cms-progress-bar {
-    position: absolute;
-    bottom: calc(100% + var(--cms-popup-gap));
-    left: 50%;
-    transform: translateX(-50%) translateY(10px);
-    opacity: 0;
-    pointer-events: none;
-    border-radius: 30px;
-    padding: 8px 18px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+	position: absolute;
+	bottom: calc(100% + var(--cms-popup-gap));
+	left: 50%;
+	transform: translateX(-50%) translateY(10px);
+	opacity: 0;
+	pointer-events: none;
+	border-radius: 30px;
+	padding: 8px 18px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 #cms-progress-bar.active {
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    transform: translateX(-50%) translateY(0);
+	opacity: 1 !important;
+	pointer-events: auto !important;
+	transform: translateX(-50%) translateY(0);
 }
 
 .cms-progress-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: #ffffff;
-    white-space: nowrap;
+	font-size: 13px;
+	font-weight: 500;
+	color: #ffffff;
+	white-space: nowrap;
 }
 
 .cms-progress-track {
-    width: 140px;
-    height: 1em;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    overflow: hidden;
-    position: relative;
+	width: 140px;
+	height: 1em;
+	background: rgba(255, 255, 255, 0.2);
+	border-radius: 10px;
+	overflow: hidden;
+	position: relative;
 }
 
 .cms-progress-fill {
-    width: 0%;
-    height: 100%;
-    background: #0066cc;
-    border-radius: 10px;
-    transition: width 0.3s ease;
+	width: 0%;
+	height: 100%;
+	background: #0066cc;
+	border-radius: 10px;
+	transition: width 0.3s ease;
 }
 
 /* 1.3. Всплывающее окно ревизий */
 #cms-revisions-pop {
-    position: absolute;
-    bottom: calc(100% + var(--cms-popup-gap));
-    left: 50%;
-    transform: translateX(-50%) translateY(10px);
-    opacity: 0;
-    pointer-events: none;
-    border-radius: 20px;
-    padding: 12px 16px;
-    max-height: 250px;
-    overflow-y: auto;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+	position: absolute;
+	bottom: calc(100% + var(--cms-popup-gap));
+	left: 50%;
+	transform: translateX(-50%) translateY(10px);
+	opacity: 0;
+	pointer-events: none;
+	border-radius: 20px;
+	padding: 12px 16px;
+	max-height: 250px;
+	overflow-y: auto;
+	transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 #cms-revisions-pop.active {
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    transform: translateX(-50%) translateY(0);
+	opacity: 1 !important;
+	pointer-events: auto !important;
+	transform: translateX(-50%) translateY(0);
 }
 
 .revisions-pop-header {
-    font-weight: 600;
-    font-size: 13px;
-    margin-bottom: 8px;
-    color: rgba(255, 255, 255, 0.9);
-    text-align: center;
+	font-weight: 600;
+	font-size: 13px;
+	margin-bottom: 8px;
+	color: rgba(255, 255, 255, 0.9);
+	text-align: center;
 }
 
 #cms-revisions-pop ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 }
 
 /* Группы элементов тулбара по режимам (text / link / image) */
 .cms-tb-group {
-    display: none;
-    align-items: center;
-    gap: 8px;
+	display: none;
+	align-items: center;
+	gap: 8px;
 }
 
 #cms-toolbar[data-mode="text"] .cms-tb-group[data-group="text"],
 #cms-toolbar[data-mode="link"] .cms-tb-group[data-group="link"],
 #cms-toolbar[data-mode="image"] .cms-tb-group[data-group="image"] {
-    display: flex;
+	display: flex;
 }
 
 /* Лейбл в тулбаре */
 .cms-tb-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.85);
-    margin-right: 2px;
+	font-size: 13px;
+	font-weight: 500;
+	color: rgba(255, 255, 255, 0.85);
+	margin-right: 2px;
 }
 
 /* Поля ввода в тулбаре */
 .cms-tb-input {
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 20px;
-    color: #ffffff;
-    padding: 4px 12px;
-    font-size: 13px;
-    outline: none;
-    width: 220px;
-    transition: border-color 0.15s;
+	background: rgba(255, 255, 255, 0.15);
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: 20px;
+	color: #ffffff;
+	padding: 4px 12px;
+	font-size: 13px;
+	outline: none;
+	width: 220px;
+	transition: border-color 0.15s;
 }
 
 .cms-tb-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
+	color: rgba(255, 255, 255, 0.5);
 }
 
 .cms-tb-input:focus {
-    border-color: #0066cc;
-    background: rgba(255, 255, 255, 0.2);
+	border-color: #0066cc;
+	background: rgba(255, 255, 255, 0.2);
 }
 
 .cms-tb-file {
-    font-size: 12px;
-    color: #ffffff;
-    cursor: pointer;
+	font-size: 12px;
+	color: #ffffff;
+	cursor: pointer;
 }
 
 /* Разделитель между группами кнопок */
 .cms-tb-divider {
-    width: 1px;
-    height: 16px;
-    background: rgba(255, 255, 255, 0.2);
-    margin: 0 4px;
+	width: 1px;
+	height: 16px;
+	background: rgba(255, 255, 255, 0.2);
+	margin: 0 4px;
 }
 
 /* Кнопки тулбара */
 .cms-tb-btn {
-    background: transparent;
-    border: 1px solid transparent;
-    color: rgba(255, 255, 255, 0.75);
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    padding: 0;
+	background: transparent;
+	border: 1px solid transparent;
+	color: rgba(255, 255, 255, 0.75);
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	padding: 0;
 }
 
 .cms-tb-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    color: #ffffff;
+	background: rgba(255, 255, 255, 0.2);
+	color: #ffffff;
 }
 
 /* Блок-кнопка открытия ревизий в юзербаре */
 .cms-rev-btn {
-    position: relative;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #ffffff;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    transition: background 0.2s ease, border-color 0.2s ease;
+	position: relative;
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	color: #ffffff;
+	padding: 4px 12px;
+	border-radius: 20px;
+	font-size: 12px;
+	font-weight: 500;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .cms-rev-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.3);
+	background: rgba(255, 255, 255, 0.2);
+	border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Скрытие кнопки ревизий через CSS, если число ревизий у страницы = 0 */
 .cms-rev-btn[data-count="0"] {
-    display: none !important;
+	display: none !important;
 }
 
 /* Активное состояние кнопки */
 .cms-tb-btn.is-active {
-    background: #0066cc;
-    color: #ffffff;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+	background: #0066cc;
+	color: #ffffff;
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* Текстовая кнопка (например, span) */
 .cms-tb-text {
-    font-size: 11px;
-    font-weight: 700;
-    font-family: monospace;
-    letter-spacing: -0.5px;
+	font-size: 11px;
+	font-weight: 700;
+	font-family: monospace;
+	letter-spacing: -0.5px;
 }
 
 /* ===================================================
    ИКОНКИ TABLER (CSS MASK DATA URI)
    =================================================== */
 .tabler-icon {
-    display: inline-block;
-    width: 18px;
-    height: 18px;
-    background-color: currentColor;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-    mask-position: center;
-    -webkit-mask-size: 100% 100%;
-    mask-size: 100% 100%;
+	display: inline-block;
+	width: 18px;
+	height: 18px;
+	background-color: currentColor;
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	mask-position: center;
+	-webkit-mask-size: 100% 100%;
+	mask-size: 100% 100%;
 }
 
 .tabler--bold {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M7 5h6a3.5 3.5 0 0 1 0 7H7zm6 7h1a3.5 3.5 0 0 1 0 7H7v-7'/%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M7 5h6a3.5 3.5 0 0 1 0 7H7zm6 7h1a3.5 3.5 0 0 1 0 7H7v-7'/%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
 }
 
 .tabler--italic {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5h6M7 19h6m1-14l-4 14'/%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5h6M7 19h6m1-14l-4 14'/%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
 }
 
 .tabler--underline {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M7 5v5a5 5 0 0 0 10 0V5M5 19h14'/%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M7 5v5a5 5 0 0 0 10 0V5M5 19h14'/%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
 }
 
 .tabler--strikethrough {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M5 12h14m-3-5.5A4 2 0 0 0 12 5h-1a3.5 3.5 0 0 0 0 7h2a3.5 3.5 0 0 1 0 7h-1.5a4 2 0 0 1-4-1.5'/%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M5 12h14m-3-5.5A4 2 0 0 0 12 5h-1a3.5 3.5 0 0 0 0 7h2a3.5 3.5 0 0 1 0 7h-1.5a4 2 0 0 1-4-1.5'/%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
 }
 
 .tabler--link {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m9 15l6-6m-4-3l.463-.536a5 5 0 0 1 7.071 7.072L18 13m-5 5l-.397.534a5.07 5.07 0 0 1-7.127 0a4.97 4.97 0 0 1 0-7.071L6 11'/%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m9 15l6-6m-4-3l.463-.536a5 5 0 0 1 7.071 7.072L18 13m-5 5l-.397.534a5.07 5.07 0 0 1-7.127 0a4.97 4.97 0 0 1 0-7.071L6 11'/%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
 }
 
 .tabler--clear-formatting {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m17 15l4 4m0-4l-4 4M7 6V5h11v1M7 19h4m2-14L9 19'/%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m17 15l4 4m0-4l-4 4M7 6V5h11v1M7 19h4m2-14L9 19'/%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
 }
 
 .tabler--device-floppy {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'%3E%3Cpath d='M6 4h10l4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2'/%3E%3Cpath d='M10 14a2 2 0 1 0 4 0a2 2 0 1 0-4 0m4-10v4H8V4'/%3E%3C/g%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'%3E%3Cpath d='M6 4h10l4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2'/%3E%3Cpath d='M10 14a2 2 0 1 0 4 0a2 2 0 1 0-4 0m4-10v4H8V4'/%3E%3C/g%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
 }
 
 .tabler--loader-2 {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 3a9 9 0 1 0 9 9'/%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 3a9 9 0 1 0 9 9'/%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
 }
 
 .tabler--history {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 8v4l3 3m6-3a9 9 0 1 1-3-6.7L21 8m0-4v4h-4'/%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 8v4l3 3m6-3a9 9 0 1 1-3-6.7L21 8m0-4v4h-4'/%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
 }
 
 .tabler--logout {
-    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'%3E%3Cpath d='M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2'/%3E%3Cpath d='M9 12h12l-3-3m0 6l3-3'/%3E%3C/g%3E%3C/svg%3E");
-    -webkit-mask-image: var(--svg);
-    mask-image: var(--svg);
-    display: none;
+	--svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'%3E%3Cpath d='M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2'/%3E%3Cpath d='M9 12h12l-3-3m0 6l3-3'/%3E%3C/g%3E%3C/svg%3E");
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
+	display: none;
 }
 
 /* ===================================================
    МОДАЛЬНОЕ ОКНО ВЫБОРА НАЛОЖЕННЫХ КАРТИНОК
    =================================================== */
 #cms-img-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.95);
-    opacity: 0;
-    pointer-events: none;
-    border-radius: 20px;
-    padding: 16px;
-    width: 340px;
-    max-width: 90vw;
-    z-index: 999999;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%) scale(0.95);
+	opacity: 0;
+	pointer-events: none;
+	border-radius: 20px;
+	padding: 16px;
+	width: 340px;
+	max-width: 90vw;
+	z-index: 999999;
+	transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 #cms-img-modal.active {
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    transform: translate(-50%, -50%) scale(1);
+	opacity: 1 !important;
+	pointer-events: auto !important;
+	transform: translate(-50%, -50%) scale(1);
 }
 
 .cms-img-modal-header {
-    font-weight: 600;
-    font-size: 13px;
-    margin-bottom: 12px;
-    color: rgba(255, 255, 255, 0.9);
-    text-align: center;
+	font-weight: 600;
+	font-size: 13px;
+	margin-bottom: 12px;
+	color: rgba(255, 255, 255, 0.9);
+	text-align: center;
 }
 
 .cms-img-modal-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	justify-content: center;
 }
 
 .cms-img-choice {
-    width: max-content;
-    padding: 4px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.08);
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.15s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+	width: max-content;
+	padding: 4px;
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.08);
+	cursor: pointer;
+	transition: background 0.15s ease, transform 0.15s ease;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .cms-img-choice:hover {
-    background: #0066cc;
-    transform: scale(1.03);
+	background: #0066cc;
+	transform: scale(1.03);
 }
 
 .cms-img-choice img {
-    width: 140px;
-    height: 140px;
-    object-fit: cover;
-    border-radius: 8px;
-    display: block;
-    transition: object-fit 0.15s ease;
+	width: 140px;
+	height: 140px;
+	object-fit: cover;
+	border-radius: 8px;
+	display: block;
+	transition: object-fit 0.15s ease;
 }
 
 .cms-img-choice:hover img {
-    object-fit: contain;
+	object-fit: contain;
 }
 
 /* Переключатель (Switch) */
 .cms-switch-label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    font-weight: 500;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	cursor: pointer;
+	font-weight: 500;
 }
 
-.cms-switch-input { display: none; }
+.cms-switch-input {
+	display: none;
+}
 
 .cms-switch-slider {
-    position: relative;
-    width: 38px;
-    height: 22px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 20px;
-    transition: background 0.25s ease;
-    display: inline-block;
+	position: relative;
+	width: 38px;
+	height: 22px;
+	background: rgba(255, 255, 255, 0.2);
+	border-radius: 20px;
+	transition: background 0.25s ease;
+	display: inline-block;
 }
 
 .cms-switch-slider::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
-    background: #ffffff;
-    border-radius: 50%;
-    transition: transform 0.25s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+	content: '';
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 18px;
+	height: 18px;
+	background: #ffffff;
+	border-radius: 50%;
+	transition: transform 0.25s ease;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.cms-switch-input:checked + .cms-switch-slider {
-    background: #0066cc;
+.cms-switch-input:checked+.cms-switch-slider {
+	background: #0066cc;
 }
 
-.cms-switch-input:checked + .cms-switch-slider::after {
-    transform: translateX(16px);
+.cms-switch-input:checked+.cms-switch-slider::after {
+	transform: translateX(16px);
 }
 
 /* Кнопки */
 .cms-btn-save {
-    background: #0066cc;
-    color: #ffffff;
-    border: none;
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-weight: 600;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s ease;
+	display: flex;
+	align-items: center;
+	background: #0066cc;
+	color: #ffffff;
+	border: none;
+	padding: 6px 16px;
+	border-radius: 20px;
+	font-weight: 600;
+	font-size: 13px;
+	cursor: pointer;
+	transition: all 0.2s ease;
 }
 
 .cms-btn-save:hover:not(:disabled) {
-    background: #0052a3;
-    transform: translateY(-1px);
+	background: #0052a3;
+	transform: translateY(-1px);
 }
 
 .cms-btn-save:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* Иконки внутри кнопки «Сохранить» */
 .cms-btn-save .tabler--loader-2 {
-    display: none;
+	display: none;
 }
 
 /* Анимация вращения спиннера */
 @keyframes cms-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+	from {
+		transform: rotate(0deg);
+	}
+
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 /* Состояние во время AJAX-загрузки */
 body.cms-ajax-loading .cms-btn-save {
-    opacity: 0.7;
-    cursor: wait !important;
-    pointer-events: none !important;
+	opacity: 0.7;
+	cursor: wait !important;
+	pointer-events: none !important;
 }
 
 body.cms-ajax-loading .cms-btn-save .tabler--device-floppy {
-    display: none !important;
+	display: none !important;
 }
 
 body.cms-ajax-loading .cms-btn-save .tabler--loader-2 {
-    display: inline-block !important;
-    animation: cms-spin 1s linear infinite;
+	display: inline-block !important;
+	animation: cms-spin 1s linear infinite;
 }
 
 .cms-logout-btn {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 12px;
-    cursor: pointer;
-    transition: color 0.2s;
-    margin-left: 4px;
-    padding: 0;
-    display: flex;
-    align-items: center;
+	background: transparent;
+	border: none;
+	color: rgba(255, 255, 255, 0.6);
+	font-size: 12px;
+	cursor: pointer;
+	transition: color 0.2s;
+	margin-left: 4px;
+	padding: 0;
+	display: flex;
+	align-items: center;
 }
-.cms-logout-btn:hover { color: #ffffff; }
+
+.cms-logout-btn:hover {
+	color: #ffffff;
+}
 
 /* Ревизии */
 .cms-badge {
-    background: #0066cc;
-    color: #ffffff;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-weight: 700;
+	background: #0066cc;
+	color: #ffffff;
+	font-size: 10px;
+	padding: 2px 6px;
+	border-radius: 10px;
+	font-weight: 700;
 }
 
 .cms-rev-item {
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    color: rgba(255, 255, 255, 0.85);
-    background: rgba(255, 255, 255, 0.08);
-    transition: background 0.15s, color 0.15s;
-    text-align: center;
-    white-space: nowrap;
+	padding: 6px 12px;
+	font-size: 12px;
+	border-radius: 8px;
+	cursor: pointer;
+	color: rgba(255, 255, 255, 0.85);
+	background: rgba(255, 255, 255, 0.08);
+	transition: background 0.15s, color 0.15s;
+	text-align: center;
+	white-space: nowrap;
 }
 
 .cms-rev-item:hover {
-    background: #0066cc;
-    color: #ffffff;
+	background: #0066cc;
+	color: #ffffff;
 }
 
 .cms-rev-empty {
-    padding: 6px 10px;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
-    text-align: center;
-    white-space: nowrap;
+	padding: 6px 10px;
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.5);
+	text-align: center;
+	white-space: nowrap;
 }
 
 /* Подсветка редактируемых элементов */
 body.cms-edit-mode .editable[id] {
-    outline: 2px dashed #0066cc;
-    outline-offset: 3px;
-    transition: outline-color 0.15s ease, background-color 0.15s ease !important;
+	outline: 2px dashed #0066cc;
+	outline-offset: 3px;
+	transition: outline-color 0.15s ease, background-color 0.15s ease !important;
 }
 
 body.cms-edit-mode .editable[id]:hover {
-    outline-color: #00ccaa;
+	outline-color: #00ccaa;
 }
 
 body.cms-edit-mode .editable:not([id]) {
-    outline: 2px dashed #e63946 !important;
-    outline-offset: 3px;
-    background: rgba(230, 57, 70, 0.15) !important;
-    cursor: not-allowed !important;
+	outline: 2px dashed #e63946 !important;
+	outline-offset: 3px;
+	background: rgba(230, 57, 70, 0.15) !important;
+	cursor: not-allowed !important;
 }
 
 /* Активный выбранный элемент прямо сейчас */
 body.cms-edit-mode .editable.cms-active-target {
-    outline: 2px solid #00ccaa !important;
+	outline: 2px solid #00ccaa !important;
 }
 
 /* Минимальная высота пустых li при редактировании */
 body.cms-edit-mode .editable li,
 body.cms-edit-mode li.editable {
-    min-height: 1em;
+	min-height: 1em;
 }
 
 /* ===================================================
    МОБИЛЬНАЯ АДАПТИВНОСТЬ (Экран <= 600px)
    =================================================== */
 @media (max-width: 600px) {
-    #cms-userbar {
-        padding: 6px 14px;
-        gap: 12px;
-    }
+	#cms-userbar {
+		padding: 6px 14px;
+		gap: 12px;
+	}
 
-    /* Скрываем текстовые подписи */
-    .cms-switch-label span:last-child,
-    .cms-rev-text,
-    .cms-logout-text {
-        display: none !important;
-    }
+	/* Скрываем текстовые подписи */
+	.cms-switch-label span:last-child,
+	.cms-rev-text,
+	.cms-logout-text {
+		display: none !important;
+	}
 
-    /* Показываем иконку выхода вместо текста */
-    .cms-logout-btn .tabler--logout {
-        display: inline-block !important;
-    }
+	/* Показываем иконку выхода вместо текста */
+	.cms-logout-btn .tabler--logout {
+		display: inline-block !important;
+	}
 }

@@ -1,17 +1,17 @@
 <?php
 class base {
 	protected function success(array $data = []): void {
-        if (!$_POST['method']) {
-            return;
-        }
+		if (!$_POST['method']) {
+			return;
+		}
 
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(array_merge(['success' => true], $data));
-        die;
+		header('Content-Type: application/json; charset=utf-8');
+		echo json_encode(array_merge(['success' => true], $data));
+		die;
 	}
-	
+
 	protected function error(string $message): void {
-        if ($_POST['method']) {
+		if ($_POST['method']) {
 			header('Content-Type: application/json; charset=utf-8');
 			echo json_encode(['success' => false, 'message' => $message]);
 		} else {
@@ -23,13 +23,14 @@ class base {
 	}
 
 	protected function log(string $message, $filename): void {
-		if (!CMS_CONFIG['debug']) return;
+		if (!CMS_CONFIG['debug'])
+			return;
 
 		if (!is_dir(paths::$debug_dir)) {
 			@mkdir(paths::$debug_dir, 0755, true);
 		}
 
-		$logFile = paths::$debug_dir . '/'.$filename;
+		$logFile = paths::$debug_dir . '/' . $filename;
 		$timestamp = date('Y-m-d H:i:s');
 		$formattedMessage = "[{$timestamp}] {$message}\n";
 
