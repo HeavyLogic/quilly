@@ -342,13 +342,13 @@ import { sendAjax, on } from './common.js';
 			// Принимаем result из ответа PHP
 			sendAjax(formData, async (result) => {
 				const progressBar = document.getElementById('cms-progress-bar');
-				const progressLabel = document.getElementById('cms-progress-label');
+				const progressLabel = document.querySelector('#cms-progress-label span');
 				const progressFill = document.getElementById('cms-progress-fill');
 
 				// ШАГ 2: Поочередная загрузка изображений
 				if (imageTasks.length > 0) {
 					progressFill.style.width = '0%';
-					progressLabel.innerText = `Загружено (0/${imageTasks.length})`;
+					progressLabel.innerText = `0/${imageTasks.length}`;
 					progressBar?.classList.add('active');
 
 					const total = imageTasks.length;
@@ -374,7 +374,7 @@ import { sendAjax, on } from './common.js';
 							() => {
 								const pct = Math.round(((i + 1) / total) * 100);
 								if (progressFill) progressFill.style.width = pct + '%';
-								if (progressLabel) progressLabel.innerText = `Загружено (${i + 1}/${total})`;
+								if (progressLabel) progressLabel.innerText = `${i + 1}/${total}`;
 							}, () => {
 								progressBar?.classList.remove('active');
 								saveBtn.removeAttribute('disabled');

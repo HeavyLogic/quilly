@@ -62,9 +62,11 @@ class revisions extends base {
 
 		$maxRevisions = (int) (CMS_CONFIG['max_revisions'] ?? 10);
 		if ($maxRevisions <= 0) {
-			$this->log("makeRevision(): Создание ревизий отключено (max_revisions = {$maxRevisions})", 'revisions.txt');
+			$this->log("makeRevision(): Revisions disabled (max_revisions = {$maxRevisions})", 'revisions.txt');
 			return;
 		}
+
+		loc::section('revisions');
 
 		// Снимок формируется строго на основе даты последнего изменения файла (filemtime)
 		$lastModTime = @filemtime(paths::$file_full_path) ?: time();
@@ -79,7 +81,7 @@ class revisions extends base {
 		// Если архив с такой датой уже существует — пересоздаем его
 		if (file_exists($zipPath)) {
 			if (!@unlink($zipPath)) {
-				$this->error('Не удалось обновить имеющийся архив ревизии: ' . $dateStr . '.zip');
+				$this->error(loc::_('cant_delete_zip').': ' . $dateStr . '.zip');
 			}
 		}
 
@@ -88,7 +90,7 @@ class revisions extends base {
 
 		$zip = new ZipArchive();
 		if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-			$this->error('Не удалось создать ZIP-архив ревизии');
+			$this->error(loc::_('cant_create_zip'));
 		}
 
 		// Добавляем HTML-файл по его относительному пути
@@ -123,6 +125,8 @@ class revisions extends base {
 		if (!$files)
 			return '';
 
+		loc::section('revisions');
+
 		rsort($files);
 
 		$revisions = [];
@@ -151,7 +155,7 @@ class revisions extends base {
 		?>
 		<ul>
 			<?php if (empty($revisions)): ?>
-				<li class="cms-rev-empty">Нет ревизий</li>
+				<li class="cms-rev-empty"><?php echo loc::_('no_revisions'); ?></li>
 			<?php else: ?>
 				<?php foreach ($revisions as $rev): ?>
 					<li class="cms-rev-item" data-file="<?= htmlspecialchars($rev['filename']) ?>"><?= htmlspecialchars($rev['date']) ?>
@@ -165,11 +169,12 @@ class revisions extends base {
 	}
 
 	public function get_revisions_button() {
+		loc::section('revisions');
 		ob_start();
 		?>
-		<div class="cms-rev-btn" id="cms-btn-revs" data-count="<?= self::$revisions_count ?>" title="История ревизий">
+		<div class="cms-rev-btn" id="cms-btn-revs" data-count="<?= self::$revisions_count ?>" title="<?php echo loc::_('rev_history'); ?>">
 			<span class="tabler-icon tabler--history"></span>
-			<span class="cms-rev-text">Ревизии</span>
+			<span class="cms-rev-text"><?php echo loc::_('revisions'); ?></span>
 			<span class="cms-badge" id="cms-revs-badge"><?= self::$revisions_count ?></span>
 		</div>
 		<?php
@@ -178,17 +183,18 @@ class revisions extends base {
 	}
 
 	public function rollback_revision() {
+		loc::section('revisions');
 		$revision_filename = basename($_POST['revision_file'] ?? '');
 		if ($revision_filename) {
 			$revision_zip_path = paths::$revisions_folder_path . '/' . $revision_filename;
 		}
 
 		if (!$revision_filename) {
-			$this->error('Не указан файл ревизии');
+			$this->error(loc::_('file_not_recieved'));
 		}
 
 		if (!file_exists($revision_zip_path)) {
-			$this->error('Файл ревизии не найден: ' . $revision_filename);
+			$this->error(loc::_('file_not_found').': ' . $revision_filename);
 		}
 
 		try {
@@ -217,13 +223,13 @@ class revisions extends base {
 				// 6. Удаляем архивированный файл ревизии, так как эта версия стала живым сайтом
 				@unlink($revision_zip_path);
 
-				$this->success(['message' => 'Откат успешно выполнен']);
+				$this->success();
 			} else {
-				$this->error('Не удалось открыть ZIP-архив ревизии');
+				$this->error(loc::_('cant_open_zip'));
 			}
 		} catch (Throwable $e) {
-			$this->log("PHP Exception при откате ревизии: " . $e->getMessage(), 'revisions.txt');
-			$this->error('Ошибка отката: ' . $e->getMessage());
+			$this->log("PHP Exception in rollback: " . $e->getMessage(), 'revisions.txt');
+			$this->error(loc::_('rollback_error').': ' . $e->getMessage());
 		}
 	}
 

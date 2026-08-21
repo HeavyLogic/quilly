@@ -69,7 +69,7 @@ class editor extends base {
 
 				<!-- 1.3 Список ревизий -->
 				<div id="cms-revisions-pop" class="cms-glass-card" style="opacity: 0; pointer-events: none;">
-					<?php echo $revisions->get_revisions_list(); ?>
+					<?php echo $revisions->get_revisions_list(); loc::section('editor'); ?>
 				</div>
 
 				<!-- 1.4 Главный юзербар -->
@@ -80,7 +80,7 @@ class editor extends base {
 						<span><?php echo loc::_('edit'); ?></span>
 					</label>
 
-					<?php echo $revisions->get_revisions_button(); ?>
+					<?php echo $revisions->get_revisions_button(); loc::section('editor'); ?>
 
 					<button class="cms-btn-save" id="cms-btn-save" disabled>
 						<span class="tabler-icon tabler--device-floppy" style="vertical-align: middle; margin-right: 4px;"></span>

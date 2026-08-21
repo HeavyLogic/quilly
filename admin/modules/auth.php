@@ -69,13 +69,14 @@ class auth extends base {
 	 * Action: Вход в систему
 	 */
 	public function login() {
+		loc::section('auth');
 		self::init_session();
 
 		$login = trim($_POST['login'] ?? '');
 		$pass = trim($_POST['password'] ?? '');
 
 		if (!$login || !$pass) {
-			$this->error('Заполните логин и пароль');
+			$this->error(loc::_('field_missing'));
 		}
 
 		$db = new db();
@@ -107,7 +108,7 @@ class auth extends base {
 			$redirect = ($userData['role'] === 'admin') ? '/admin/' : '/';
 			$this->success(['redirect' => $redirect]);
 		} else {
-			$this->error('Неверный логин или пароль');
+			$this->error(loc::_('wrong_credentials'));
 		}
 	}
 
