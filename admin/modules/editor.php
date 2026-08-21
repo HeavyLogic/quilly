@@ -21,7 +21,7 @@ class editor extends base {
 					<span style="color: #ff4d4f; font-weight: 600;">
 					<?php echo loc::_('global', 'error'); ?>: <?php echo loc::_('php_version_error'); ?>
 					</span>
-					<button class="cms-logout-btn" id="cms-btn-logout"><?php echo loc::_('exit'); ?></button>
+					<button class="cms-logout-btn" id="cms-btn-logout"><?php echo loc::_('global', 'exit'); ?></button>
 				</div>
 			<?php else: ?>
 				<!-- 1.1 Тулбар форматирования -->
@@ -88,7 +88,7 @@ class editor extends base {
 						<?php echo loc::_('save'); ?>
 					</button>
 					<button class="cms-logout-btn" id="cms-btn-logout">
-						<span class="cms-logout-text"><?php echo loc::_('exit'); ?></span>
+						<span class="cms-logout-text"><?php echo loc::_('global', 'exit'); ?></span>
 						<span class="tabler-icon tabler--logout"></span>
 					</button>
 				</div>

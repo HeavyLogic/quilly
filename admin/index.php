@@ -3,6 +3,8 @@
 require_once __DIR__ . '/includes/init.php';
 $output_mode = null;
 
+loc::section('dashboard');
+
 // Проверяем есть ли вообще пользователи в базе. Если нет - первоначальная настройка
 
 $db = new db();
@@ -31,7 +33,7 @@ if ($db->is_empty()) {
 
 <head>
 	<meta charset="UTF-8">
-	<title>Панель управления</title>
+	<title><?php echo loc::_('control_panel'); ?></title>
 	<link rel="stylesheet" href="assets/admin.css?ver=1">
 	<script type="module" src="assets/admin.js"></script>
 </head>
@@ -48,57 +50,57 @@ if ($db->is_empty()) {
 				<!-- 1. ФОРМА ПЕРВИЧНОЙ НАСТРОЙКИ (НЕТ БАЗЫ) -->
 				<div class="login-box">
 					<header>
-						<h2>Первичная настройка</h2>
+						<h2><?php echo loc::_('initial_setup'); ?></h2>
 					</header>
 					<form id="setupForm" autocomplete="off">
 						<input type="text" name="login" placeholder="Логин админа" required autocomplete="off">
 						<input type="password" name="password" placeholder="Пароль" required autocomplete="new-password">
 						<input type="password" name="password_confirm" placeholder="Повторите пароль" required
 							autocomplete="new-password">
-						<button type="submit" style="width: 100%;">Создать админа</button>
+						<button type="submit" style="width: 100%;"><?php echo loc::_('create_user'); ?></button>
 					</form>
 				</div>
 
 			<?php elseif ($output_mode == 'dashboard'): ?>
 				<!-- 3. ИНТЕРФЕЙС АДМИНА (УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ) -->
 				<header>
-					<h2>Управление пользователями</h2>
-					<button class="btn-logout" id="btnLogout">Выйти</button>
+					<h2><?php echo loc::_('users_control'); ?></h2>
+					<button class="btn-logout" id="btnLogout"><?php echo loc::_('global', 'exit'); ?></button>
 				</header>
 
 				<div class="table-header">
-					<div>User</div>
-					<div>Password</div>
-					<div>Role</div>
-					<div>Действие</div>
+					<div><?php echo loc::_('login'); ?></div>
+					<div><?php echo loc::_('password'); ?></div>
+					<div><?php echo loc::_('role'); ?></div>
+					<div><?php echo loc::_('action'); ?></div>
 				</div>
 
 				<div id="usersList">
-					<?php echo new superuser()->getUsersHtml(); ?>
+					<?php echo new superuser()->getUsersHtml(); loc::section('dashboard'); ?>
 				</div>
 
 				<div class="controls">
-					<button id="btnOpenAddModal">+ Добавить пользователя</button>
+					<button id="btnOpenAddModal">+ <?php echo loc::_('create_user'); ?></button>
 				</div>
 
 			<?php elseif ($output_mode == 'login'): ?>
 				<!-- 2. ФОРМА ВХОДА (БАЗА ЕСТЬ, НЕ ЗАЛОГИНЕН) -->
 				<div class="login-box">
 					<header>
-						<h2>Авторизация</h2>
+						<h2><?php echo loc::_('auth'); ?></h2>
 					</header>
 					<form id="loginForm" autocomplete="off">
 						<input type="text" name="login" placeholder="Логин" required autocomplete="off">
 						<input type="password" name="password" placeholder="Пароль" required
 							autocomplete="current-password">
-						<button type="submit">Войти</button>
+						<button type="submit"><?php echo loc::_('enter'); ?></button>
 					</form>
 				</div>
 
 			<?php endif; ?>
 		</div>
 
-		<a class="go-back" href="/">← Вернуться на сайт</a>
+		<a class="go-back" href="/">← <?php echo loc::_('back_to_site'); ?></a>
 	</div>
 
 
@@ -106,18 +108,18 @@ if ($db->is_empty()) {
 		<!-- Модальное окно добавления юзера -->
 		<div class="modal-bg" id="addModal">
 			<div class="modal">
-				<h3>Новый пользователь</h3>
+				<h3><?php echo loc::_('new_user'); ?></h3>
 				<div id="modalErrorAlert" class="alert-error"></div>
 				<form id="addUserForm" autocomplete="off">
-					<input type="text" name="user" placeholder="Логин" required autocomplete="off">
-					<input type="password" name="password" placeholder="Пароль" required autocomplete="new-password">
+					<input type="text" name="user" placeholder="<?php echo loc::_('login'); ?>" required autocomplete="off">
+					<input type="password" name="password" placeholder="<?php echo loc::_('password'); ?>" required autocomplete="new-password">
 					<select name="role">
-						<option value="editor">editor</option>
-						<option value="admin">admin</option>
+						<option value="editor"><?php echo loc::_('editor'); ?></option>
+						<option value="admin"><?php echo loc::_('admin'); ?></option>
 					</select>
 					<div class="modal-actions">
-						<button type="button" class="btn-cancel" id="btnCloseModal">Отмена</button>
-						<button type="submit">Создать</button>
+						<button type="button" class="btn-cancel" id="btnCloseModal"><?php echo loc::_('cancel'); ?></button>
+						<button type="submit"><?php echo loc::_('create'); ?></button>
 					</div>
 				</form>
 			</div>

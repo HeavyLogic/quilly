@@ -3,12 +3,13 @@ class superuser extends base {
 
 	public function __construct() {
 		$method = $_POST['method'] ?? '';
+		loc::section('superuser');
 
 		// Проверяем права админа для всех действий, КРОМЕ первичной установки
 		if ($method !== 'setup') {
 			$auth = new auth();
 			if (!$auth->is_admin()) {
-				$this->error('Доступ запрещен');
+				$this->error(loc::_('no_access'));
 			}
 		}
 	}
@@ -19,7 +20,7 @@ class superuser extends base {
 
 		// Проверяем, действительно ли база пуста
 		if (!$db->is_empty()) {
-			$this->error('База данных уже настроена');
+			$this->error(loc::_('db_exists'));
 		}
 
 		$login = trim($_POST['login'] ?? '');
@@ -27,11 +28,11 @@ class superuser extends base {
 		$passConfirm = trim($_POST['password_confirm'] ?? '');
 
 		if (!$login || !$pass || !$passConfirm) {
-			$this->error('Заполните все поля');
+			$this->error(loc::_('fill_all_fields'));
 		}
 
 		if ($pass !== $passConfirm) {
-			$this->error('Пароли не совпадают');
+			$this->error(loc::_('pass2_doesnt_match'));
 		}
 
 		$token = bin2hex(random_bytes(16));
@@ -63,7 +64,7 @@ class superuser extends base {
 		}
 
 		if (!$user || !$pass) {
-			$this->error('Заполните все поля');
+			$this->error(loc::_('fill_all_fields'));
 		}
 
 		$db = new db();
@@ -71,7 +72,7 @@ class superuser extends base {
 		// Проверяем, занят ли логин
 		$exists = $db->fetch_one("SELECT id FROM users WHERE user = ?", [$user]);
 		if ($exists) {
-			$this->error('Пользователь с таким логином уже существует');
+			$this->error(loc::_('user_exists'));
 		}
 
 		$db->query("INSERT INTO users (user, password, auth, role) VALUES (?, ?, '', ?)", [
@@ -92,7 +93,7 @@ class superuser extends base {
 		$value = trim($_POST['value'] ?? '');
 
 		if (!in_array($field, ['user', 'password', 'role']) || !$id) {
-			$this->error('Некорректные данные');
+			$this->error(loc::_('bad_data'));
 		}
 
 		if ($field === 'role' && !in_array($value, ['admin', 'editor'])) {
@@ -109,7 +110,7 @@ class superuser extends base {
 		if ($field === 'user') {
 			$exists = $db->fetch_one("SELECT id FROM users WHERE user = ? AND id != ?", [$value, $id]);
 			if ($exists) {
-				$this->error('Пользователь с таким логином уже существует');
+				$this->error(loc::_('user_exists'));
 			}
 		}
 
@@ -125,7 +126,7 @@ class superuser extends base {
 		$id = (int) ($_POST['id'] ?? 0);
 
 		if (!$id) {
-			$this->error('Не указан ID пользователя');
+			$this->error(loc::_('no_user_id'));
 		}
 
 		$db = new db();
@@ -143,20 +144,53 @@ class superuser extends base {
 
 		ob_start();
 		if (empty($users)): ?>
-			<div class="empty-msg">База пользователей пуста</div>
+			<div class="empty-msg"><?php echo loc::_('db_is_empty'); ?></div>
 		<?php else: ?>
 			<?php foreach ($users as $u): ?>
 				<div class="user-row" data-id="<?= $u['id'] ?>">
-					<div class="cell editable" data-field="user" title="Двойной клик для правки"><?= htmlspecialchars($u['user']) ?>
+					<div class="cell editable" data-field="user" data-value="<?= htmlspecialchars($u['user']) ?>" title="<?php echo loc::_('dbl_click_to_edit'); ?>"><?= htmlspecialchars($u['user']) ?>
 					</div>
-					<div class="cell editable" data-field="password" title="Двойной клик для смены пароля">**********</div>
-					<div class="cell editable" data-field="role" title="Двойной клик для правки">
-						<?= htmlspecialchars($u['role'] ?? 'editor') ?></div>
-					<div class="cell action-cell"><button class="btn-delete">Удалить</button></div>
+					<div class="cell editable" data-field="password" title="<?php echo loc::_('dbl_click_to_edit'); ?>">**********</div>
+					<div class="cell editable" data-field="role" data-value="<?= htmlspecialchars($u['role']) ?>" title="<?php echo loc::_('dbl_click_to_edit'); ?>">
+						<?php echo loc::_('dashboard', $u['role']); ?>
+					</div>
+					<div class="cell action-cell">
+						<button class="btn-delete"><?php echo loc::_('delete'); ?></button>
+					</div>
 				</div>
 			<?php endforeach; ?>
 		<?php endif;
 
 		return ob_get_clean();
+	}
+
+	public function get_edit_field() {
+		$input = '';
+		$field = htmlspecialchars(trim($_POST['field'] ?? ''));
+		switch ($field) {
+			case 'user':
+				$value = htmlspecialchars(trim($_POST['value'] ?? ''));
+				$input = '<input name="'.$field.'" type="text" value="'.$value.'">';
+				break;
+			case 'password':
+				$input = '<input name="'.$field.'" type="password" value="" autocomplete="new-password">';
+				break;
+			case 'role':
+				$value = $_POST['value'] ?? 'editor';
+				if (!in_array($value, ['admin', 'editor'])) {
+					$value = 'editor';
+				}
+
+				$input = '<select name="'.$field.'">
+					<option value="editor" '.(($value == 'editor') ? 'selected' : '').'>'.loc::_('dashboard', 'editor').'</option>
+					<option value="admin" '.(($value == 'admin') ? 'selected' : '').'>'.loc::_('dashboard', 'admin').'</option>
+					</select>';
+				break;
+			default:
+				$this->error(loc::_('bad_data'));
+				break;
+		}
+
+		$this->success(['html' => $input]);
 	}
 }

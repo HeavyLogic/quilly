@@ -1,4 +1,4 @@
-import { sendAjax } from './common.js';
+import { sendAjax, on } from './common.js';
 // TODO: Заюзать больше из common.js
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -152,84 +152,66 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 	});
 
-	// 6. Редактирование ячеек
-	document.addEventListener('dblclick', (e) => {
-		const cell = e.target.closest('.editable');
-		if (!cell || cell.querySelector('input, select')) return;
-
-		const field = cell.dataset.field;
-		const userRow = cell.closest('.user-row');
+	// Helper для отправки сохраненного значения
+	function saveCell(fieldElement) {
+		const cell = fieldElement.closest('.editable');
+		const userRow = fieldElement.closest('.user-row');
+		
+		if (!cell || !userRow) return;
+	
+		// Защита от повторной отправки (например, если Enter вызвал blur)
+		if (fieldElement.dataset.saving) return;
+		fieldElement.dataset.saving = 'true';
+	
+		sendAjax({
+			module: 'superuser',
+			method: 'update_field',
+			id: userRow.dataset.id,
+			field: cell.dataset.field,
+			value: fieldElement.value.trim()
+		}, (result) => {
+			updateUsersList(result.html);
+		});
+	}
+	
+	// 1. Двойной клик — запрашиваем HTML инпута/селекта с сервера
+	on('dblclick', '.editable', function() {
+		// Если уже редактируется — игнорируем
+		if (this.querySelector('input, select')) return;
+	
+		const userRow = this.closest('.user-row');
 		if (!userRow) return;
-
-		const id = userRow.dataset.id;
-		const currentVal = (field === 'password') ? '' : cell.textContent.trim();
-
-		if (field === 'role') {
-			const select = document.createElement('select');
-			select.innerHTML = '<option value="editor">editor</option><option value="admin">admin</option>';
-			select.value = currentVal || 'editor';
-
-			cell.innerHTML = '';
-			cell.appendChild(select);
-			select.focus();
-
-			let isSaved = false;
-			const saveRole = () => {
-				if (isSaved) return;
-				isSaved = true;
-
-				sendAjax({
-					module: 'superuser',
-					method: 'update_field',
-					id: id,
-					field: field,
-					value: select.value
-				}, (result) => {
-					updateUsersList(result.html);
-				});
-			};
-
-			select.addEventListener('change', saveRole);
-			select.addEventListener('blur', saveRole);
-
-		} else {
-			const input = document.createElement('input');
-			input.type = 'text';
-			input.value = currentVal;
-
-			cell.innerHTML = '';
-			cell.appendChild(input);
-			input.focus();
-
-			let isSaved = false;
-			const save = () => {
-				if (isSaved) return;
-				isSaved = true;
-				const newVal = input.value.trim();
-
-				if (field === 'password' && newVal === '') {
-					cell.textContent = '**********';
-					return;
-				}
-
-				sendAjax({
-					module: 'superuser',
-					method: 'update_field',
-					id: id,
-					field: field,
-					value: newVal
-				}, (result) => {
-					updateUsersList(result.html);
-				});
-			};
-
-			input.addEventListener('blur', save);
-			input.addEventListener('keydown', (e) => {
-				if (e.key === 'Enter') {
-					input.removeEventListener('blur', save);
-					save();
-				}
-			});
+	
+		sendAjax({
+			module: 'superuser',
+			method: 'get_edit_field',
+			id: userRow.dataset.id,
+			field: this.dataset.field,
+			value: this.dataset.value || ''
+		}, (result) => {
+			this.innerHTML = result.html;
+			
+			// Автофокус на вставленный элемент
+			const input = this.querySelector('input, select');
+			if (input) input.focus();
+		});
+	});
+	
+	// 2. Сохранение при потере фокуса (для input и select)
+	on('focusout', '.editable input, .editable select', function() {
+		saveCell(this);
+	});
+	
+	// 3. Сохранение при изменении значения (для select)
+	on('change', '.editable select', function() {
+		saveCell(this);
+	});
+	
+	// 4. Сохранение по нажатию Enter (для input)
+	on('keydown', '.editable input', function(e) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			saveCell(this);
 		}
 	});
 });
