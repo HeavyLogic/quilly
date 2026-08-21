@@ -16,7 +16,7 @@ class base {
 			echo json_encode(['success' => false, 'message' => $message]);
 		} else {
 			echo '<div style="background:#ffebe9;color:#d1242f;padding:15px;border:1px solid #ff8182;border-radius:6px;font-family:sans-serif;margin:10px;">';
-			echo '<b>Ошибка:</b> ' . $message;
+			echo '<b>'.loc::_('global', 'error').':</b> ' . $message;
 			echo '</div>';
 		}
 		die;

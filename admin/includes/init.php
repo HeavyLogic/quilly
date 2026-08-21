@@ -9,6 +9,8 @@ require_once __DIR__ . '/paths.php';
 paths::init($config);
 define('CMS_CONFIG', $config);
 unset($config);
+require_once paths::$site_root_dir . '/admin/includes/loc.php';
+loc::init();
 require_once paths::$site_root_dir . '/admin/modules/base.php';
 require_once paths::$site_root_dir . '/admin/includes/db.php';
 require_once paths::$site_root_dir . '/admin/modules/auth.php';
