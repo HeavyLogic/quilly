@@ -96,6 +96,13 @@ class superuser extends base {
 			$this->error(loc::_('bad_data'));
 		}
 
+		if ($value === '') {
+			// do nothing
+			$this->success([
+				'html' => $this->getUsersHtml()
+			]);
+		}
+
 		if ($field === 'role' && !in_array($value, ['admin', 'editor'])) {
 			$value = 'editor';
 		}
@@ -181,7 +188,7 @@ class superuser extends base {
 			</div>
 		</form>
 		<?php
-		
+
 		$this->success([
 			'html' => ob_get_clean(),
 			'title' => loc::_('new_user')
