@@ -29,10 +29,10 @@ class upload extends base {
 			$this->error('Элемент #' . $targetId . ' не найден в HTML');
 		}
 
-		// Проверяем ограничение по минимальной высоте из атрибута data-min-height
+		// Проверяем ограничение по минимальной высоте из атрибута data-height
 		$minReqH = 0;
-		if ($imgElement->hasAttribute('data-min-height')) {
-			$minReqH = (int) preg_replace('/[^\d]/', '', $imgElement->getAttribute('data-min-height'));
+		if ($imgElement->hasAttribute('data-height')) {
+			$minReqH = (int) preg_replace('/[^\d]/', '', $imgElement->getAttribute('data-height'));
 		}
 
 		try {
@@ -107,29 +107,8 @@ class upload extends base {
 			}
 
 			// ОБНОВЛЕНИЕ DOM В HTML
-			// 1. Извлекаем старые пути ДО изменения для последующего удаления с диска
-			$oldSrc = trim($imgElement->getAttribute('src') ?? '');
-			$oldSrcSet = trim($imgElement->getAttribute('srcset') ?? '');
-			$oldFilesToDelete = [];
-
-			if ($oldSrc) {
-				$p = $this->resolve_local_image_path($oldSrc);
-				if ($p)
-					$oldFilesToDelete[] = $p;
-			}
-
-			if ($oldSrcSet) {
-				$srcSetEntries = explode(',', $oldSrcSet);
-				foreach ($srcSetEntries as $entry) {
-					$parts = preg_split('/\s+/', trim($entry));
-					if (!empty($parts[0])) {
-						$p = $this->resolve_local_image_path($parts[0]);
-						if ($p)
-							$oldFilesToDelete[] = $p;
-					}
-				}
-			}
-			$oldFilesToDelete = array_unique($oldFilesToDelete);
+			// 1. Старые локальные файлы (src + все картинки из srcset) - собираем ДО замены атрибутов
+			$oldFilesToDelete = array_values(paths::resolve_local_images([$imgElement]));
 
 			// 2. Устанавливаем новый src
 			$imgElement->setAttribute('src', $htmlSrc);
@@ -338,46 +317,5 @@ class upload extends base {
 	private function abs_path_to_web_url(string $absPath): string {
 		$relPath = ltrim(str_replace(paths::$site_root_dir, '', $absPath), '/\\');
 		return '/' . str_replace('\\', '/', $relPath);
-	}
-
-	// ХЕЛПЕР 2: Переводит любой URL в локальный относительный путь файла от корня
-	private function url_to_local_rel_path(string $url): ?string {
-		$url = trim($url);
-		if (!$url)
-			return null;
-
-		$targetHost = parse_url($url, PHP_URL_HOST);
-
-		// Если в URL указан домен (например, http://site.com/img.jpg или //site.com/img.jpg)
-		if ($targetHost !== null) {
-			$currentHost = parse_url(paths::$post_url, PHP_URL_HOST);
-
-			// Если хосты не совпадают без учета регистра и протокола — это сторонний сайт (Unsplash и т.д.)
-			if ($currentHost && strcasecmp($targetHost, $currentHost) !== 0) {
-				return null;
-			}
-		}
-
-		// Извлекаем путь из URL (без хоста, схемы и GET-параметров ?v=123)
-		$path = parse_url($url, PHP_URL_PATH);
-		if (!$path)
-			return null;
-
-		return ltrim($path, '/\\');
-	}
-
-	// ХЕЛПЕР 3: Проверка и резолв локального физического пути картинки по её src
-	private function resolve_local_image_path(string $src): ?string {
-		$cleanRelPath = $this->url_to_local_rel_path($src);
-		if (!$cleanRelPath)
-			return null;
-
-		$fullPath = paths::$site_root_dir . '/' . $cleanRelPath;
-
-		if (file_exists($fullPath) && is_file($fullPath)) {
-			return $fullPath;
-		}
-
-		return null;
 	}
 }

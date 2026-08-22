@@ -5,53 +5,14 @@ class revisions extends base {
 
 	// Поиск, нормализация путей в HTML (приведение к /assets/...) и сборка путей для ZIP
 	private function getEditableImagesPaths(Dom\HTMLDocument $doc): array {
-		$imageRelPaths = [];
-
-		$siteDomain = parse_url(paths::$post_url, PHP_URL_HOST) ?? '';
-		$siteScheme = parse_url(paths::$post_url, PHP_URL_SCHEME) ?? 'http';
-		$siteBaseUrl = $siteDomain ? ($siteScheme . '://' . $siteDomain) : '';
-
 		$images = $doc->querySelectorAll('img.editable');
-		$docModified = false;
-
-		foreach ($images as $img) {
-			$src = trim($img->getAttribute('src') ?? '');
-			if (!$src)
-				continue;
-
-			// 1. Если в src прописан абсолютный URL текущего сайта — срезаем домен
-			if ($siteBaseUrl && strpos($src, $siteBaseUrl) === 0) {
-				$src = substr($src, strlen($siteBaseUrl));
-			}
-
-			// 2. Пропускаем внешние ссылки на чужие домены
-			if (preg_match('#^(https?:)?//#i', $src)) {
-				continue;
-			}
-
-			// 3. Гарантируем ведущий слэш для HTML атрибута src (например, /assets/img.webp)
-			$cleanPath = parse_url($src, PHP_URL_PATH) ?? $src;
-			$htmlSrc = '/' . ltrim($cleanPath, '/');
-
-			if ($img->getAttribute('src') !== $htmlSrc) {
-				$img->setAttribute('src', $htmlSrc);
-				$docModified = true;
-			}
-
-			// 4. Формируем путь для ZIP (без ведущего слэша) и путь на диске
-			$zipRelPath = ltrim($cleanPath, '/');
-			$fullImgPath = paths::$site_root_dir . '/' . $zipRelPath;
-
-			if (file_exists($fullImgPath) && is_file($fullImgPath)) {
-				$imageRelPaths[$zipRelPath] = $fullImgPath;
-			}
-		}
-
-		// Сохраняем измененные корневые пути в HTML перед архивацией
-		if ($docModified) {
+	
+		$imageRelPaths = paths::resolve_local_images($images, $modified);
+	
+		if ($modified) {
 			$doc->saveHtmlFile(paths::$file_full_path);
 		}
-
+	
 		return $imageRelPaths;
 	}
 

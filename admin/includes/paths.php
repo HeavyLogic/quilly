@@ -89,4 +89,94 @@ class paths {
 
 		return $cleanPath;
 	}
+	
+	/**
+	 * Резолвит src и srcset переданных <img>-элементов в реально существующие
+	 * локальные файлы на диске (включая миниатюры из srcset). Заодно приводит
+	 * абсолютные URL текущего домена в src/srcset к относительным.
+	 *
+	 * ВАЖНО: метод меняет DOM только в памяти, saveHtmlFile() — забота вызывающего кода.
+	 *
+	 * @param iterable $imgElements Например, результат $doc->querySelectorAll(...)
+	 * @param bool|null &$modified  Сюда запишется true, если DOM был изменён
+	 * @return array<string,string> [$relPath (без ведущего слэша) => $absPath]
+	 */
+	public static function resolve_local_images(iterable $imgElements, ?bool &$modified = null): array {
+		$modified = false;
+		$result = [];
+
+		foreach ($imgElements as $el) {
+			foreach (['src', 'srcset'] as $attr) {
+				$value = trim($el->getAttribute($attr) ?? '');
+				if ($value === '')
+					continue;
+
+				$isSrcset = $attr === 'srcset';
+				$entries = $isSrcset ? explode(',', $value) : [$value];
+				$newEntries = [];
+				$changed = false;
+
+				foreach ($entries as $entry) {
+					$parts = preg_split('/\s+/', trim($entry));
+					$url = $parts[0] ?? '';
+					$descriptor = $parts[1] ?? '';
+					if ($url === '')
+						continue;
+
+					$resolved = self::resolve_image_url($url);
+					if (!$resolved) {
+						// Чужой домен (Unsplash и т.п.) - не трогаем
+						$newEntries[] = trim($entry);
+						continue;
+					}
+
+					if (file_exists($resolved['abs']) && is_file($resolved['abs'])) {
+						$result[$resolved['rel']] = $resolved['abs'];
+					}
+
+					if ($url !== $resolved['web']) {
+						$changed = true;
+					}
+					$newEntries[] = $isSrcset ? trim($resolved['web'] . ' ' . $descriptor) : $resolved['web'];
+				}
+
+				if ($changed) {
+					$el->setAttribute($attr, $isSrcset ? implode(', ', $newEntries) : $newEntries[0]);
+					$modified = true;
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Резолвит один URL картинки в локальные пути. null - если чужой домен.
+	 *
+	 * @return array{rel:string, web:string, abs:string}|null
+	 */
+	private static function resolve_image_url(string $url): ?array {
+		$targetHost = parse_url($url, PHP_URL_HOST);
+
+		if ($targetHost !== null) {
+			$currentHost = parse_url(self::$post_url, PHP_URL_HOST);
+			if (!$currentHost || strcasecmp($targetHost, $currentHost) !== 0) {
+				return null;
+			}
+		}
+
+		$path = parse_url($url, PHP_URL_PATH);
+		if (!$path)
+			return null;
+
+		$relPath = ltrim(str_replace('\\', '/', $path), '/');
+		if ($relPath === '')
+			return null;
+
+		return [
+			'rel' => $relPath,
+			'web' => '/' . $relPath,
+			'abs' => self::$site_root_dir . '/' . $relPath,
+		];
+	}
 }

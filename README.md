@@ -66,14 +66,14 @@ Mark text and images as editable with the `editable` class and a unique `id`. Yo
 </ul>
 ```
 
-The image uploader creates thumbnails to use in `srcset` with `size="auto"`. `srcset` doesn't consider `height`. So if you use `object-fit: cover` on your images with specific height, then the thumbnail can stretch and become blurry. To prevent this, add `data-min-height` attribute to your images. This will tell the uploader to skip generating thumbnail sizes that don't satisfy the element's minimum height from your design.
+The image uploader creates thumbnails to use in `srcset` with `size="auto"`. `srcset` doesn't consider `height`. So if you use `object-fit: cover` on your images with specific height, then the thumbnail can stretch and become blurry. To prevent this, add `data-height` attribute to your images. This will tell the uploader to skip generating thumbnail sizes that don't satisfy the element's minimum height from your design.
 
 ```html
 <img
   class="editable"
   id="hero-image"
   src="/assets/static/hero.jpg"
-  data-min-height="350"
+  data-height="350"
   alt="Hero Image"
 >
 ```
