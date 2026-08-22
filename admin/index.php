@@ -102,29 +102,6 @@ if ($db->is_empty()) {
 
 		<a class="go-back" href="/">← <?php echo loc::_('back_to_site'); ?></a>
 	</div>
-
-
-	<?php if ($output_mode == 'dashboard'): ?>
-		<!-- Модальное окно добавления юзера -->
-		<div class="modal-bg" id="addModal">
-			<div class="modal">
-				<h3><?php echo loc::_('new_user'); ?></h3>
-				<div id="modalErrorAlert" class="alert-error"></div>
-				<form id="addUserForm" autocomplete="off">
-					<input type="text" name="user" placeholder="<?php echo loc::_('login'); ?>" required autocomplete="off">
-					<input type="password" name="password" placeholder="<?php echo loc::_('password'); ?>" required autocomplete="new-password">
-					<select name="role">
-						<option value="editor"><?php echo loc::_('editor'); ?></option>
-						<option value="admin"><?php echo loc::_('admin'); ?></option>
-					</select>
-					<div class="modal-actions">
-						<button type="button" class="btn-cancel" id="btnCloseModal"><?php echo loc::_('cancel'); ?></button>
-						<button type="submit"><?php echo loc::_('create'); ?></button>
-					</div>
-				</form>
-			</div>
-		</div>
-	<?php endif; ?>
 </body>
 
 </html>

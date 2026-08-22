@@ -163,6 +163,30 @@ class superuser extends base {
 
 		return ob_get_clean();
 	}
+	public function new_user_modal() {
+		ob_start();
+		?> 
+		<!-- Модальное окно добавления юзера -->
+		<div id="modalErrorAlert" class="alert-error"></div>
+		<form id="addUserForm" autocomplete="off">
+			<input type="text" name="user" placeholder="<?php echo loc::_('login'); ?>" autocomplete="off">
+			<input type="password" name="password" placeholder="<?php echo loc::_('password'); ?>" autocomplete="new-password">
+			<select name="role">
+				<option value="editor"><?php echo loc::_('editor'); ?></option>
+				<option value="admin"><?php echo loc::_('admin'); ?></option>
+			</select>
+			<div class="modal-actions">
+				<button type="button" class="btn-cancel" id="btnCloseModal"><?php echo loc::_('cancel'); ?></button>
+				<button type="submit"><?php echo loc::_('create'); ?></button>
+			</div>
+		</form>
+		<?php
+		
+		$this->success([
+			'html' => ob_get_clean(),
+			'title' => loc::_('new_user')
+		]);
+	}
 
 	public function get_edit_field() {
 		$input = '';

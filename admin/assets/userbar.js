@@ -1,3 +1,4 @@
+// userbar.js
 import { sendAjax, on } from './common.js';
 
 (() => {

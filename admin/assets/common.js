@@ -1,3 +1,4 @@
+// common.js
 export async function sendAjax(data, successFunc, failFunc, force = false) {
 	if (!data) {
 		return false;
@@ -45,10 +46,14 @@ export async function sendAjax(data, successFunc, failFunc, force = false) {
 			return false;
 		}
 
-		// 2. Логика PHP
+		// 2. Бизнес-логика PHP
 		if (res.success !== true) {
-			if (failFunc) failFunc(res);
-			modal(res.message || 'Ошибка выполнения');
+			if (failFunc) {
+				failFunc(res);
+			} else {
+				// Выбрасываем модалку только если не задана "красивая механика" ошибки
+				modal(res.message || 'Run error');
+			}
 			return false;
 		}
 
@@ -73,104 +78,121 @@ export function on(event, selector, handler) {
 	});
 }
 
-export function modal(htmlContent) {
-	return new Promise((resolve) => {
-		// 1. Фон (оверлей)
-		const overlay = document.createElement('div');
-		overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 999999;
-            font-family: system-ui, -apple-system, sans-serif;
-            box-sizing: border-box;
-            padding: 20px;
-        `;
+export function modal(content, title = 'Ошибка') {
+	// 1. Фон (оверлей)
+	const overlay = document.createElement('div');
+	overlay.className = 'cms-modal-overlay';
+	overlay.style.cssText = `
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100vw;
+		height: 100vh;
+		background: rgba(0, 0, 0, 0.8);
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		z-index: 999999;
+		font-family: system-ui, -apple-system, sans-serif;
+		box-sizing: border-box;
+		padding: 20px;
+	`;
 
-		// 2. Модальное окно (ограничиваем высоту до 85% экрана)
-		const modalBox = document.createElement('div');
-		modalBox.style.cssText = `
-            background: #ffffff;
-            padding: 20px 24px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-            max-width: 480px;
-            width: 100%;
-            max-height: 85vh;
-            display: flex;
-            flex-direction: column;
-            color: #222222;
-            font-size: 16px;
-            line-height: 1.5;
-            box-sizing: border-box;
-        `;
+	// 2. Модальное окно (ограничиваем высоту до 85% экрана)
+	const modalBox = document.createElement('div');
+	modalBox.style.cssText = `
+		background: #ffffff;
+		border-radius: 10px;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+		max-width: 480px;
+		width: 100%;
+		max-height: 85vh;
+		display: flex;
+		flex-direction: column;
+		color: #222222;
+		font-size: 16px;
+		line-height: 1.5;
+		box-sizing: border-box;
+		overflow: hidden;
+	`;
 
-		// 3. Контент (вертикальный скролл при длинном тексте)
-		const content = document.createElement('div');
-		content.style.cssText = `
-            margin-bottom: 20px;
-            word-break: break-word;
-            overflow-y: auto;
-            padding-right: 4px;
-            flex: 1;
-        `;
-		content.innerHTML = htmlContent;
+	// 3. Заголовок: текст + кнопка закрытия
+	const header = document.createElement('div');
+	header.style.cssText = `
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+		padding: 16px 16px 16px 24px;
+		border-bottom: 1px solid #eeeeee;
+		flex-shrink: 0;
+	`;
 
-		// 4. Кнопка ОК (зафиксирована внизу, не сжимается при скролле)
-		const btnActions = document.createElement('div');
-		btnActions.style.cssText = `
-            display: flex;
-            justify-content: flex-end;
-            flex-shrink: 0;
-        `;
+	const titleEl = document.createElement('div');
+	titleEl.textContent = title;
+	titleEl.style.cssText = `
+		font-size: 17px;
+		font-weight: 600;
+	`;
 
-		const okBtn = document.createElement('button');
-		okBtn.textContent = 'OK';
-		okBtn.style.cssText = `
-            background: #0066cc;
-            color: #ffffff;
-            border: none;
-            padding: 8px 22px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            outline: none;
-        `;
+	const closeBtn = document.createElement('button');
+	closeBtn.textContent = '×';
+	closeBtn.setAttribute('aria-label', 'Закрыть');
+	closeBtn.setAttribute('id', 'closeModal');
+	closeBtn.style.cssText = `
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		font-size: 28px;
+		line-height: 1;
+		color: #888888;
+		padding: 0 4px;
+		outline: none;
+	`;
 
-		btnActions.appendChild(okBtn);
-		modalBox.appendChild(content);
-		modalBox.appendChild(btnActions);
-		overlay.appendChild(modalBox);
+	header.appendChild(titleEl);
+	header.appendChild(closeBtn);
 
-		// Функция закрытия и ПОЛНОГО уничтожения из DOM
-		const destroy = () => {
-			document.removeEventListener('keydown', handleKeyDown);
-			overlay.remove();
-			resolve();
-		};
+	// 4. Контент (вертикальный скролл при длинном содержимом)
+	const body = document.createElement('div');
+	body.style.cssText = `
+		padding: 20px 24px;
+		overflow-y: auto;
+		word-break: break-word;
+	`;
+	body.innerHTML = content;
 
-		const handleKeyDown = (e) => {
-			if (e.key === 'Escape' || e.key === 'Enter') {
-				destroy();
-			}
-		};
+	modalBox.appendChild(header);
+	modalBox.appendChild(body);
+	overlay.appendChild(modalBox);
 
-		// События закрытия (клик на ОК, клик на фон, клавиши Enter/Esc)
-		okBtn.addEventListener('click', destroy);
-		overlay.addEventListener('click', (e) => {
-			if (e.target === overlay) destroy();
-		});
-		document.addEventListener('keydown', handleKeyDown);
+	// Функция закрытия и полного уничтожения из DOM
+	const destroy = () => {
+		document.removeEventListener('keydown', handleKeyDown);
+		overlay.remove();
+	};
 
-		// Вставляем в документ
-		document.body.appendChild(overlay);
-		okBtn.focus();
+	const handleKeyDown = (e) => {
+		if (e.key === 'Escape') {
+			destroy();
+		}
+	};
+
+	// События закрытия (клик на ×, клик на фон, клавиша Esc)
+	closeBtn.addEventListener('click', destroy);
+	overlay.addEventListener('click', (e) => {
+		if (e.target === overlay) destroy();
 	});
+	document.addEventListener('keydown', handleKeyDown);
+
+	document.body.appendChild(overlay);
+	closeBtn.focus();
+
+	// Возвращаем функцию закрытия, чтобы можно было закрыть модалку
+	// программно — например, из колбэка успешного ajax-запроса формы внутри неё
+	return destroy;
+}
+
+export function close_modal() {
+	document.getElementById('closeModal').click();
 }
