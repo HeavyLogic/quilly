@@ -36,13 +36,13 @@ This is where this editor comes in. Now I can slap editing capabilities to any s
 #### 2. Add the script before your `</body>` closing tag:
 
 ```html
-<script src="/admin/assets/userbar.js"></script>
+<script src="/admin/assets/userbar.js" type="module"></script>
 ```
 
 By default, editor resolves HTML file path from the current URL. But if your Nginx has some weird rules, you can specify path of your current file like this:
 
 ```html
-<script src="/admin/assets/userbar.js" data-filepath="/index.html"></script>
+<script src="/admin/assets/userbar.js" type="module" data-filepath="/index.html"></script>
 ```
 
 #### 3. Make your content editable
