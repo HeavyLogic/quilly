@@ -35,9 +35,7 @@ class db extends base {
 	 */
 	private function connect_db() {
 		// Создаем папку, если её нет
-		if (!file_exists(paths::$db_full_dir)) {
-			mkdir(paths::$db_full_dir, 2775, true);
-		}
+		paths::make_dir(paths::$db_full_dir);
 
 		// Авто-защита базы для Apache
 		$htaccessPath = paths::$db_full_dir . '/.htaccess';

@@ -36,9 +36,7 @@ class upload extends base {
 		}
 
 		try {
-			if (!is_dir(paths::$upload_dir)) {
-				@mkdir(paths::$upload_dir, 2775, true);
-			}
+			paths::make_dir(paths::$upload_dir);
 
 			$tmpFile = $_FILES['image']['tmp_name'];
 			$origFullName = $_FILES['image']['name'];
@@ -220,9 +218,7 @@ class upload extends base {
 		$baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
 		$thumbsDir = paths::$upload_dir . '/thumbs';
 
-		if (!is_dir($thumbsDir)) {
-			@mkdir($thumbsDir, 2775, true);
-		}
+		paths::make_dir($thumbsDir);
 
 		foreach ((CMS_CONFIG['images']['thumb_sizes'] ?? [600, 1200]) as $tw) {
 			if ($masterW <= $tw)
@@ -275,9 +271,7 @@ class upload extends base {
 			$baseFilename = pathinfo($finalFilename, PATHINFO_FILENAME);
 			$thumbsDir = paths::$upload_dir . '/thumbs';
 
-			if (!is_dir($thumbsDir)) {
-				@mkdir($thumbsDir, 2775, true);
-			}
+			paths::make_dir($thumbsDir);
 
 			foreach ((CMS_CONFIG['images']['thumb_sizes'] ?? [600, 1200]) as $tw) {
 				if ($masterW <= $tw)

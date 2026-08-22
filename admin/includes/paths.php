@@ -179,4 +179,22 @@ class paths {
 			'abs' => self::$site_root_dir . '/' . $relPath,
 		];
 	}
+
+	/**
+	 * Гарантированное рекурсивное создание директории с ТОЧНО заданными правами,
+	 * независимо от umask php-fpm пула на конкретном сервере.
+	 * Setgid (0 2000) нужен, чтобы новые файлы/папки внутри наследовали
+	 * группу родительской папки (www-data), а не группу процесса php-fpm.
+	 */
+	public static function make_dir(string $path, int $mode = 02775): bool {
+		if (is_dir($path)) {
+			return true;
+		}
+
+		$oldUmask = umask(0);
+		$result = @mkdir($path, $mode, true);
+		umask($oldUmask);
+
+		return $result;
+	}
 }

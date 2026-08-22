@@ -26,9 +26,7 @@ class base {
 		if (!CMS_CONFIG['debug'])
 			return;
 
-		if (!is_dir(paths::$debug_dir)) {
-			@mkdir(paths::$debug_dir, 2775, true);
-		}
+		paths::make_dir(paths::$debug_dir);
 
 		$logFile = paths::$debug_dir . '/' . $filename;
 		$timestamp = date('Y-m-d H:i:s');
