@@ -1,16 +1,6 @@
 import { sendAjax, on, modal, close_modal } from './common.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-
-	function updateUsersList(html) {
-		const usersList = document.getElementById('usersList');
-		if (!usersList) {
-			return;
-		}
-
-		usersList.innerHTML = html || '';
-	}
-
 	// 1. Первичная настройка
 	on('submit', '#setupForm', function(e) {
 		e.preventDefault();
@@ -80,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			role: this.querySelector('[name="role"]').value
 		}, (result) => {
 			close_modal();
-			updateUsersList(result.html);
+			document.getElementById('usersList').innerHTML = result.html;
 		}, (result) => {
 			// красивая ошибка
 			const errorContainer = document.getElementById('modalErrorAlert');
@@ -102,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
 				method: 'delete_user',
 				id: userRow.dataset.id
 			}, (result) => {
-				updateUsersList(result.html);
+				document.getElementById('usersList').innerHTML = result.html;
 			});
 		}
 	});
@@ -124,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			field: cell.dataset.field,
 			value: fieldElement.value.trim()
 		}, (result) => {
-			updateUsersList(result.html);
+			document.getElementById('usersList').innerHTML = result.html;
 		});
 	}
 
